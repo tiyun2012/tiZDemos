@@ -10,12 +10,29 @@ export interface Geometry {
   points: { x: number; y: number }[];
 }
 
+export function normalizeExpression(expr: string): string {
+  let normalized = expr;
+  
+  // Replace common symbols and aliases
+  normalized = normalized.replace(/π/g, 'pi');
+  normalized = normalized.replace(/÷/g, '/');
+  normalized = normalized.replace(/×/g, '*');
+  normalized = normalized.replace(/√/g, 'sqrt');
+  normalized = normalized.replace(/∞/g, 'Infinity');
+  normalized = normalized.replace(/theta/gi, 'x'); // Common variable alias
+  normalized = normalized.replace(/θ/g, 'x');
+  
+  return normalized;
+}
+
 export function parseGeometry(expr: string): Geometry | null {
+  const normalizedExpr = normalizeExpression(expr);
+  
   // Match (x, y) pattern, allowing for decimals and negative numbers
   // We use a global regex to find all occurrences
   const pointRegex = /\(\s*(-?\d*\.?\d+(?:e[+-]?\d+)?)\s*,\s*(-?\d*\.?\d+(?:e[+-]?\d+)?)\s*\)/gi;
   
-  const matches = [...expr.matchAll(pointRegex)];
+  const matches = [...normalizedExpr.matchAll(pointRegex)];
   
   if (matches.length === 0) {
     return null;
@@ -58,7 +75,8 @@ export function generatePoints(
   const compiledExprs = functionExprs
     .map((e) => {
       try {
-        return { id: e.id, compiled: compile(e.expr) };
+        const normalized = normalizeExpression(e.expr);
+        return { id: e.id, compiled: compile(normalized) };
       } catch (error) {
         // console.warn(`Failed to compile expression: ${e.expr}`, error);
         return null;

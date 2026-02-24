@@ -33,11 +33,12 @@ export function Documentation() {
             <div>
               <h4 className="font-semibold text-gray-900 mb-2">Supported Operations</h4>
               <ul className="list-disc list-inside space-y-1 ml-1">
-                <li>Arithmetic: <code>+, -, *, /, ^</code></li>
-                <li>Functions: <code>sin, cos, tan, log, sqrt</code></li>
-                <li>Constants: <code>pi, e</code></li>
+                <li>Arithmetic: <code>+, -, *, /, ^</code> (also <code>×, ÷</code>)</li>
+                <li>Functions: <code>sin, cos, tan, log, sqrt</code> (also <code>√</code>)</li>
+                <li>Constants: <code>pi, e</code> (also <code>π</code>)</li>
                 <li>Logic: <code>x &lt; 0 ? -1 : 1</code> (Piecewise)</li>
                 <li>Geometry: <code>(x, y)</code> or <code>(x1, y1), (x2, y2)</code></li>
+                <li>ML/Shader: <code>max, min, floor, mod, tanh</code></li>
               </ul>
             </div>
             
@@ -45,10 +46,11 @@ export function Documentation() {
               <h4 className="font-semibold text-gray-900 mb-2">Examples</h4>
               <ul className="space-y-1 font-mono text-xs bg-gray-50 p-2 rounded border border-gray-100">
                 <li>x^2 - 4</li>
-                <li>sin(x) * x</li>
-                <li>x &lt; 0 ? 0 : x (ReLU)</li>
+                <li>sin(π * x)</li>
+                <li>√x (Square Root)</li>
+                <li>1 / (1 + e^-x) (Sigmoid)</li>
+                <li>x - floor(x) (Fract)</li>
                 <li>(1, 2) (Point)</li>
-                <li>(0,0), (1,1), (2,0) (Polygon)</li>
               </ul>
             </div>
           </div>

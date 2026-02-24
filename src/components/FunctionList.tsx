@@ -44,6 +44,20 @@ const TEMPLATES = [
   { name: 'Line Segment', expr: '(-2, -2), (2, 2)', category: 'Geometry' },
   { name: 'Triangle', expr: '(0, 0), (2, 0), (1, 2)', category: 'Geometry' },
   { name: 'Square', expr: '(0, 0), (2, 0), (2, 2), (0, 2)', category: 'Geometry' },
+  // Machine Learning
+  { name: 'Sigmoid', expr: '1 / (1 + e^-x)', category: 'Machine Learning' },
+  { name: 'ReLU', expr: 'max(0, x)', category: 'Machine Learning' },
+  { name: 'Leaky ReLU', expr: 'x > 0 ? x : 0.1 * x', category: 'Machine Learning' },
+  { name: 'Tanh', expr: 'tanh(x)', category: 'Machine Learning' },
+  { name: 'Softplus', expr: 'log(1 + e^x)', category: 'Machine Learning' },
+  { name: 'Swish', expr: 'x / (1 + e^-x)', category: 'Machine Learning' },
+  // Shader / Graphics
+  { name: 'Step', expr: 'x > 0 ? 1 : 0', category: 'Shader' },
+  { name: 'Smoothstep (0-1)', expr: 'x <= 0 ? 0 : x >= 1 ? 1 : 3*x^2 - 2*x^3', category: 'Shader' },
+  { name: 'Clamp (0-1)', expr: 'max(0, min(1, x))', category: 'Shader' },
+  { name: 'Fract', expr: 'x - floor(x)', category: 'Shader' },
+  { name: 'Modulo', expr: 'mod(x, 2)', category: 'Shader' },
+  { name: 'Pulse', expr: 'exp(-10 * (x - 1)^2)', category: 'Shader' },
 ];
 
 export function FunctionList({
