@@ -58,6 +58,7 @@ const TEMPLATES = [
   { name: 'Fract', expr: 'x - floor(x)', category: 'Shader' },
   { name: 'Modulo', expr: 'mod(x, 2)', category: 'Shader' },
   { name: 'Pulse', expr: 'exp(-10 * (x - 1)^2)', category: 'Shader' },
+  { name: 'Sine Zig-Zag', expr: '2/pi * asin(sin(x))', category: 'Advanced' },
 ];
 
 export function FunctionList({

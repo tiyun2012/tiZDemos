@@ -50,6 +50,7 @@ export function Documentation() {
                 <li>√x (Square Root)</li>
                 <li>1 / (1 + e^-x) (Sigmoid)</li>
                 <li>x - floor(x) (Fract)</li>
+                <li>2/pi * asin(sin(x)) (Sine Zig-Zag)</li>
                 <li>(1, 2) (Point)</li>
               </ul>
             </div>
