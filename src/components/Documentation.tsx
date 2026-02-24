@@ -39,6 +39,7 @@ export function Documentation() {
                 <li>Logic: <code>x &lt; 0 ? -1 : 1</code> (Piecewise)</li>
                 <li>Geometry: <code>(x, y)</code> or <code>(x1, y1), (x2, y2)</code></li>
                 <li>ML/Shader: <code>max, min, floor, mod, tanh</code></li>
+                <li>Scripting: Define variables on separate lines. Last line is result.</li>
               </ul>
             </div>
             
@@ -47,10 +48,9 @@ export function Documentation() {
               <ul className="space-y-1 font-mono text-xs bg-gray-50 p-2 rounded border border-gray-100">
                 <li>x^2 - 4</li>
                 <li>sin(π * x)</li>
-                <li>√x (Square Root)</li>
+                <li>a = 2; a * x (Variable)</li>
                 <li>1 / (1 + e^-x) (Sigmoid)</li>
                 <li>x - floor(x) (Fract)</li>
-                <li>2/pi * asin(sin(x)) (Sine Zig-Zag)</li>
                 <li>(1, 2) (Point)</li>
               </ul>
             </div>

@@ -19,7 +19,9 @@ export function normalizeExpression(expr: string): string {
   normalized = normalized.replace(/×/g, '*');
   normalized = normalized.replace(/√/g, 'sqrt');
   normalized = normalized.replace(/∞/g, 'Infinity');
-  normalized = normalized.replace(/theta/gi, 'x'); // Common variable alias
+  
+  // Use word boundaries for variable replacement to avoid partial matches in variable names
+  normalized = normalized.replace(/\btheta\b/gi, 'x'); 
   normalized = normalized.replace(/θ/g, 'x');
   
   return normalized;
@@ -90,7 +92,13 @@ export function generatePoints(
 
     compiledExprs.forEach(({ id, compiled }) => {
       try {
-        const y = compiled.evaluate({ x });
+        let y = compiled.evaluate({ x });
+        
+        // If result is a ResultSet (from multi-line expressions), take the last value
+        if (y && typeof y === 'object' && 'entries' in y && Array.isArray(y.entries)) {
+          y = y.entries[y.entries.length - 1];
+        }
+
         // Handle infinity and NaN for better plotting
         if (typeof y === 'number' && isFinite(y)) {
            point[id] = y;

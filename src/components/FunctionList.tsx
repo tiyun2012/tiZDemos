@@ -59,6 +59,9 @@ const TEMPLATES = [
   { name: 'Modulo', expr: 'mod(x, 2)', category: 'Shader' },
   { name: 'Pulse', expr: 'exp(-10 * (x - 1)^2)', category: 'Shader' },
   { name: 'Sine Zig-Zag', expr: '2/pi * asin(sin(x))', category: 'Advanced' },
+  // Scripting
+  { name: 'Damped Sine (Vars)', expr: 'A = 2\nk = 5\ndecay = 0.2\nA * sin(k * x) * e^(-decay * x)', category: 'Scripting' },
+  { name: 'Clamped Wave', expr: 'y = sin(x)\nlimit = 0.5\nmax(min(y, limit), -limit)', category: 'Scripting' },
 ];
 
 export function FunctionList({
@@ -108,7 +111,7 @@ export function FunctionList({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
             {TEMPLATES.map((template) => (
               <button
                 key={template.name}
@@ -120,7 +123,7 @@ export function FunctionList({
               >
                 <div className="font-medium">{template.name}</div>
                 <div className="text-xs text-gray-500 group-hover:text-blue-600 font-mono truncate">
-                  {template.expr}
+                  {template.expr.split('\n')[0]}
                 </div>
               </button>
             ))}
@@ -132,10 +135,10 @@ export function FunctionList({
         {functions.map((func) => (
           <div
             key={func.id}
-            className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg shadow-sm group hover:border-gray-300 transition-colors"
+            className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-lg shadow-sm group hover:border-gray-300 transition-colors"
           >
             <div
-              className="w-4 h-4 rounded-full cursor-pointer shrink-0 border border-gray-200"
+              className="w-4 h-4 rounded-full cursor-pointer shrink-0 border border-gray-200 mt-1.5"
               style={{ backgroundColor: func.color }}
               onClick={() => {
                 const currentIndex = COLORS.indexOf(func.color);
@@ -145,18 +148,19 @@ export function FunctionList({
               title="Click to change color"
             />
             
-            <div className="flex-1 min-w-0 flex items-center gap-2">
-              <span className="text-gray-500 font-mono text-sm select-none">f(x) =</span>
-              <input
-                type="text"
+            <div className="flex-1 min-w-0 flex items-start gap-2">
+              <span className="text-gray-500 font-mono text-sm select-none mt-1">f(x) =</span>
+              <textarea
                 value={func.expr}
                 onChange={(e) => onUpdateFunction(func.id, { expr: e.target.value })}
                 placeholder="e.g. sin(x) * x"
-                className="flex-1 min-w-0 bg-transparent border-none focus:ring-0 p-0 text-sm font-mono text-gray-900 placeholder:text-gray-400"
+                rows={Math.max(1, func.expr.split('\n').length)}
+                className="flex-1 min-w-0 bg-transparent border-none focus:ring-0 p-0 text-sm font-mono text-gray-900 placeholder:text-gray-400 resize-none leading-relaxed"
+                style={{ minHeight: '1.5rem' }}
               />
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 mt-0.5">
               <button
                 onClick={() => onUpdateFunction(func.id, { visible: !func.visible })}
                 className={cn(
