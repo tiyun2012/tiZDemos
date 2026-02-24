@@ -1,0 +1,5 @@
+{
+  "name": "Function Graph Visualizer",
+  "description": "A tool to visualize and explore mathematical function graphs with customizable ranges and documentation.",
+  "requestFramePermissions": []
+}
