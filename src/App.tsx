@@ -107,6 +107,9 @@ export default function App() {
                 functions={functions}
                 xDomain={xDomain}
                 yDomain={yDomain}
+                onUpdateFunction={updateFunction}
+                onUpdateXDomain={setXDomain}
+                onUpdateYDomain={setYDomain}
               />
             </div>
             

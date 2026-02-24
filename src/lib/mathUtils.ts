@@ -33,6 +33,12 @@ export function parseGeometry(expr: string): Geometry | null {
   return { type: 'polygon', points };
 }
 
+export function formatGeometry(geometry: Geometry): string {
+  return geometry.points
+    .map(p => `(${Number(p.x).toFixed(2)}, ${Number(p.y).toFixed(2)})`)
+    .join(', ');
+}
+
 export function generatePoints(
   expressions: { id: string; expr: string; color: string; visible: boolean }[],
   xMin: number,
