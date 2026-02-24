@@ -36,6 +36,8 @@ export function Documentation() {
                 <li>Arithmetic: <code>+, -, *, /, ^</code></li>
                 <li>Functions: <code>sin, cos, tan, log, sqrt</code></li>
                 <li>Constants: <code>pi, e</code></li>
+                <li>Logic: <code>x &lt; 0 ? -1 : 1</code> (Piecewise)</li>
+                <li>Geometry: <code>(x, y)</code> or <code>(x1, y1), (x2, y2)</code></li>
               </ul>
             </div>
             
@@ -44,9 +46,9 @@ export function Documentation() {
               <ul className="space-y-1 font-mono text-xs bg-gray-50 p-2 rounded border border-gray-100">
                 <li>x^2 - 4</li>
                 <li>sin(x) * x</li>
-                <li>log(x) + 2</li>
-                <li>sqrt(x^2 + 1)</li>
-                <li>1/x</li>
+                <li>x &lt; 0 ? 0 : x (ReLU)</li>
+                <li>(1, 2) (Point)</li>
+                <li>(0,0), (1,1), (2,0) (Polygon)</li>
               </ul>
             </div>
           </div>

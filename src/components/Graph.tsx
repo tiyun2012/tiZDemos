@@ -7,9 +7,10 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  ReferenceDot,
 } from 'recharts';
 import { FunctionItem } from './FunctionList';
-import { DataPoint } from '../lib/mathUtils';
+import { DataPoint, parseGeometry } from '../lib/mathUtils';
 
 interface GraphProps {
   data: DataPoint[];
@@ -47,6 +48,12 @@ export function Graph({ data, functions, xDomain, yDomain }: GraphProps) {
     return null;
   };
 
+  // Separate functions into regular plots and geometry
+  const geometryItems = functions
+    .filter(f => f.visible)
+    .map(f => ({ ...f, geometry: parseGeometry(f.expr) }))
+    .filter(f => f.geometry !== null);
+
   return (
     <div className="w-full h-full min-h-[400px] bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       <ResponsiveContainer width="100%" height="100%">
@@ -79,8 +86,12 @@ export function Graph({ data, functions, xDomain, yDomain }: GraphProps) {
           <ReferenceLine y={0} stroke="#374151" strokeWidth={1.5} />
           <ReferenceLine x={0} stroke="#374151" strokeWidth={1.5} />
 
-          {functions.map((func) => (
-            func.visible && (
+          {/* Render Functions */}
+          {functions.map((func) => {
+            const isGeometry = parseGeometry(func.expr) !== null;
+            if (isGeometry || !func.visible) return null;
+            
+            return (
               <Line
                 key={func.id}
                 type="monotone"
@@ -88,11 +99,56 @@ export function Graph({ data, functions, xDomain, yDomain }: GraphProps) {
                 stroke={func.color}
                 strokeWidth={2}
                 dot={false}
-                isAnimationActive={false} // Disable animation for smoother updates when dragging/zooming
-                connectNulls={false} // Don't connect points across undefined regions (like asymptotes)
+                isAnimationActive={false}
+                connectNulls={false}
               />
-            )
-          ))}
+            );
+          })}
+
+          {/* Render Geometry (Points and Polygons) */}
+          {geometryItems.map((item) => {
+            if (item.geometry?.type === 'point') {
+              const p = item.geometry.points[0];
+              return (
+                <ReferenceDot
+                  key={item.id}
+                  x={p.x}
+                  y={p.y}
+                  r={5}
+                  fill={item.color}
+                  stroke="white"
+                  strokeWidth={2}
+                  isFront={true}
+                />
+              );
+            } else if (item.geometry?.type === 'polygon') {
+              // For polygons, we use a Line component with custom data
+              // We close the loop by adding the first point to the end if not already closed
+              const points = [...item.geometry.points];
+              if (points.length > 2) {
+                 const first = points[0];
+                 const last = points[points.length - 1];
+                 if (first.x !== last.x || first.y !== last.y) {
+                    points.push(first);
+                 }
+              }
+
+              return (
+                <Line
+                  key={item.id}
+                  data={points}
+                  dataKey="y"
+                  type="linear"
+                  stroke={item.color}
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: item.color, strokeWidth: 0 }}
+                  activeDot={false}
+                  isAnimationActive={false}
+                />
+              );
+            }
+            return null;
+          })}
         </LineChart>
       </ResponsiveContainer>
     </div>

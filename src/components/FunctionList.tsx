@@ -1,5 +1,6 @@
-import { Trash2, Eye, EyeOff, Plus } from 'lucide-react';
+import { Trash2, Eye, EyeOff, Plus, LayoutTemplate, X } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useState } from 'react';
 
 export interface FunctionItem {
   id: string;
@@ -10,7 +11,7 @@ export interface FunctionItem {
 
 interface FunctionListProps {
   functions: FunctionItem[];
-  onAddFunction: () => void;
+  onAddFunction: (expr?: string) => void;
   onUpdateFunction: (id: string, updates: Partial<FunctionItem>) => void;
   onRemoveFunction: (id: string) => void;
 }
@@ -26,24 +27,91 @@ const COLORS = [
   '#84cc16', // lime-500
 ];
 
+const TEMPLATES = [
+  { name: 'Linear', expr: '2*x + 1', category: 'Basic' },
+  { name: 'Quadratic', expr: 'x^2 - 4', category: 'Basic' },
+  { name: 'Cubic', expr: 'x^3 - 2*x', category: 'Basic' },
+  { name: 'Sine Wave', expr: 'sin(x)', category: 'Trigonometry' },
+  { name: 'Cosine Wave', expr: 'cos(x)', category: 'Trigonometry' },
+  { name: 'Tangent', expr: 'tan(x)', category: 'Trigonometry' },
+  { name: 'Absolute Value', expr: 'abs(x)', category: 'Piecewise' },
+  { name: 'Step Function', expr: 'x < 0 ? -1 : 1', category: 'Piecewise' },
+  { name: 'Piecewise Parabola', expr: 'x < 0 ? x^2 : x', category: 'Piecewise' },
+  { name: 'Triangle Wave (Periodic)', expr: '2/pi * asin(sin(x))', category: 'Advanced' },
+  { name: 'Square Wave', expr: 'sign(sin(x))', category: 'Advanced' },
+  { name: 'Gaussian', expr: 'e^(-x^2)', category: 'Advanced' },
+  { name: 'Point', expr: '(2, 3)', category: 'Geometry' },
+  { name: 'Line Segment', expr: '(-2, -2), (2, 2)', category: 'Geometry' },
+  { name: 'Triangle', expr: '(0, 0), (2, 0), (1, 2)', category: 'Geometry' },
+  { name: 'Square', expr: '(0, 0), (2, 0), (2, 2), (0, 2)', category: 'Geometry' },
+];
+
 export function FunctionList({
   functions,
   onAddFunction,
   onUpdateFunction,
   onRemoveFunction,
 }: FunctionListProps) {
+  const [showTemplates, setShowTemplates] = useState(false);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">Functions</h2>
-        <button
-          onClick={onAddFunction}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Add Function
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowTemplates(!showTemplates)}
+            className={cn(
+              "flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              showTemplates 
+                ? "bg-gray-200 text-gray-900" 
+                : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+            )}
+            title="Choose from templates"
+          >
+            <LayoutTemplate className="w-4 h-4" />
+            Templates
+          </button>
+          <button
+            onClick={() => onAddFunction()}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add
+          </button>
+        </div>
       </div>
+
+      {showTemplates && (
+        <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-4 mb-4 animate-in fade-in slide-in-from-top-2">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-sm font-semibold text-gray-900">Select a Template</h3>
+            <button 
+              onClick={() => setShowTemplates(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {TEMPLATES.map((template) => (
+              <button
+                key={template.name}
+                onClick={() => {
+                  onAddFunction(template.expr);
+                  setShowTemplates(false);
+                }}
+                className="text-left px-3 py-2 text-sm rounded-md hover:bg-blue-50 hover:text-blue-700 transition-colors border border-transparent hover:border-blue-100 group"
+              >
+                <div className="font-medium">{template.name}</div>
+                <div className="text-xs text-gray-500 group-hover:text-blue-600 font-mono truncate">
+                  {template.expr}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
         {functions.map((func) => (
@@ -100,7 +168,7 @@ export function FunctionList({
 
         {functions.length === 0 && (
           <div className="text-center py-8 text-gray-500 text-sm bg-gray-50 rounded-lg border border-dashed border-gray-200">
-            No functions added yet. Click "Add Function" to start plotting.
+            No functions added yet. Click "Add" or "Templates" to start plotting.
           </div>
         )}
       </div>

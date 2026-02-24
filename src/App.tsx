@@ -23,14 +23,14 @@ export default function App() {
     return generatePoints(functions, xDomain[0], xDomain[1], 500);
   }, [functions, xDomain]);
 
-  const addFunction = () => {
+  const addFunction = (expr: string = '') => {
     const newId = Math.random().toString(36).substr(2, 9);
     const colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
     const randomColor = colors[Math.floor(Math.random() * colors.length)];
     
     setFunctions([
       ...functions,
-      { id: newId, expr: '', color: randomColor, visible: true },
+      { id: newId, expr, color: randomColor, visible: true },
     ]);
   };
 

@@ -5,6 +5,34 @@ export interface DataPoint {
   [key: string]: number | null;
 }
 
+export interface Geometry {
+  type: 'point' | 'polygon';
+  points: { x: number; y: number }[];
+}
+
+export function parseGeometry(expr: string): Geometry | null {
+  // Match (x, y) pattern, allowing for decimals and negative numbers
+  // We use a global regex to find all occurrences
+  const pointRegex = /\(\s*(-?\d*\.?\d+(?:e[+-]?\d+)?)\s*,\s*(-?\d*\.?\d+(?:e[+-]?\d+)?)\s*\)/gi;
+  
+  const matches = [...expr.matchAll(pointRegex)];
+  
+  if (matches.length === 0) {
+    return null;
+  }
+
+  const points = matches.map(match => ({
+    x: parseFloat(match[1]),
+    y: parseFloat(match[2])
+  }));
+
+  if (points.length === 1) {
+    return { type: 'point', points };
+  }
+
+  return { type: 'polygon', points };
+}
+
 export function generatePoints(
   expressions: { id: string; expr: string; color: string; visible: boolean }[],
   xMin: number,
@@ -14,14 +42,19 @@ export function generatePoints(
   const step = (xMax - xMin) / (pointCount - 1);
   const data: DataPoint[] = [];
 
+  // Filter out geometry items, only compile actual functions
+  const functionExprs = expressions.filter(e => {
+    if (!e.visible || e.expr.trim() === '') return false;
+    return parseGeometry(e.expr) === null;
+  });
+
   // Compile expressions once
-  const compiledExprs = expressions
-    .filter((e) => e.visible && e.expr.trim() !== '')
+  const compiledExprs = functionExprs
     .map((e) => {
       try {
         return { id: e.id, compiled: compile(e.expr) };
       } catch (error) {
-        console.warn(`Failed to compile expression: ${e.expr}`, error);
+        // console.warn(`Failed to compile expression: ${e.expr}`, error);
         return null;
       }
     })
