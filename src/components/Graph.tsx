@@ -8,10 +8,12 @@ import {
   ResponsiveContainer,
   ReferenceLine,
   ReferenceDot,
+  Customized,
 } from 'recharts';
 import { FunctionItem } from './FunctionList';
-import { DataPoint, parseGeometry, formatGeometry, Geometry } from '../lib/mathUtils';
-import { useState, useRef, useEffect } from 'react';
+import { DataPoint, parseGeometry, formatGeometry, Geometry, getNiceTicks } from '../lib/mathUtils';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import React from 'react';
 
 interface GraphProps {
   data: DataPoint[];
@@ -27,6 +29,30 @@ const MARGIN = { top: 20, right: 30, left: 0, bottom: 20 };
 const Y_AXIS_WIDTH = 50;
 const X_AXIS_HEIGHT = 30;
 
+const TickLabel = ({ cx, cy, axisType, tickValue }: any) => {
+  if (Math.abs(tickValue) < 1e-10) return null;
+
+  if (axisType === 'x') {
+    return (
+      <g>
+        <line x1={cx} y1={cy} x2={cx} y2={cy + 5} stroke="#6b7280" strokeWidth={1} />
+        <text x={cx} y={cy + 18} textAnchor="middle" fontSize={11} fill="#6b7280" className="font-mono">
+          {Number(tickValue).toFixed(1).replace(/\.0$/, '')}
+        </text>
+      </g>
+    );
+  } else {
+    return (
+      <g>
+        <line x1={cx} y1={cy} x2={cx - 5} y2={cy} stroke="#6b7280" strokeWidth={1} />
+        <text x={cx - 8} y={cy + 4} textAnchor="end" fontSize={11} fill="#6b7280" className="font-mono">
+          {Number(tickValue).toFixed(1).replace(/\.0$/, '')}
+        </text>
+      </g>
+    );
+  }
+};
+
 export function Graph({ 
   data, 
   functions, 
@@ -39,6 +65,13 @@ export function Graph({
   const [dragging, setDragging] = useState<{ id: string; pointIndex: number } | null>(null);
   const [panning, setPanning] = useState<{ startX: number; startY: number; startXDomain: [number, number]; startYDomain: [number, number] } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Check if origin is visible to toggle default axes
+  const isOriginXVisible = yDomain[0] <= 0 && yDomain[1] >= 0;
+  const isOriginYVisible = xDomain[0] <= 0 && xDomain[1] >= 0;
+
+  const xTicks = useMemo(() => getNiceTicks(xDomain[0], xDomain[1], 10), [xDomain]);
+  const yTicks = useMemo(() => getNiceTicks(yDomain[0], yDomain[1], 10), [yDomain]);
 
   // Zoom handling
   useEffect(() => {
@@ -237,24 +270,50 @@ export function Graph({
             tickCount={10}
             allowDataOverflow
             stroke="#9ca3af"
-            tick={{ fontSize: 11, fill: '#6b7280' }}
+            tick={!isOriginXVisible ? { fontSize: 11, fill: '#6b7280' } : false}
             tickFormatter={(val) => Number(val).toFixed(1)}
             height={X_AXIS_HEIGHT}
+            axisLine={!isOriginXVisible}
           />
           <YAxis
             type="number"
             domain={yDomain}
             allowDataOverflow
             stroke="#9ca3af"
-            tick={{ fontSize: 11, fill: '#6b7280' }}
+            tick={!isOriginYVisible ? { fontSize: 11, fill: '#6b7280' } : false}
             tickFormatter={(val) => Number(val).toFixed(1)}
             width={Y_AXIS_WIDTH}
+            axisLine={!isOriginYVisible}
           />
           <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#9ca3af', strokeWidth: 1, strokeDasharray: '4 4' }} />
           
-          {/* Axis lines */}
+          {/* Axis lines - Always show reference lines for x=0 and y=0 */}
           <ReferenceLine y={0} stroke="#374151" strokeWidth={1.5} />
           <ReferenceLine x={0} stroke="#374151" strokeWidth={1.5} />
+          
+          {/* Custom Ticks for X Axis (along y=0) */}
+          {isOriginXVisible && xTicks.map(tick => (
+            <ReferenceDot 
+              key={`x-${tick}`} 
+              x={tick} 
+              y={0} 
+              r={0} 
+              shape={(props: any) => <TickLabel {...props} axisType="x" tickValue={tick} />} 
+              isFront={true}
+            />
+          ))}
+
+          {/* Custom Ticks for Y Axis (along x=0) */}
+          {isOriginYVisible && yTicks.map(tick => (
+            <ReferenceDot 
+              key={`y-${tick}`} 
+              x={0} 
+              y={tick} 
+              r={0} 
+              shape={(props: any) => <TickLabel {...props} axisType="y" tickValue={tick} />} 
+              isFront={true}
+            />
+          ))}
 
           {/* Render Functions */}
           {functions.map((func) => {

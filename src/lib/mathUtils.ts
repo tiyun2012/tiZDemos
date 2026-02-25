@@ -58,6 +58,35 @@ export function formatGeometry(geometry: Geometry): string {
     .join(', ');
 }
 
+export function getNiceTicks(min: number, max: number, count: number = 10): number[] {
+  if (min === max) return [min];
+  
+  const range = max - min;
+  const roughStep = range / (count - 1);
+  const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+  const normalizedStep = roughStep / magnitude;
+  
+  let step;
+  if (normalizedStep < 1.5) step = 1 * magnitude;
+  else if (normalizedStep < 3) step = 2 * magnitude;
+  else if (normalizedStep < 7.5) step = 5 * magnitude;
+  else step = 10 * magnitude;
+  
+  // Round min/max to avoid floating point issues
+  const start = Math.ceil(min / step) * step;
+  const end = Math.floor(max / step) * step;
+  
+  const ticks: number[] = [];
+  // Use a small epsilon to handle floating point inaccuracies
+  for (let t = start; t <= end + step / 1000; t += step) {
+    // Fix floating point precision issues (e.g. 0.30000000000000004)
+    const roundedTick = Math.round(t / step) * step;
+    ticks.push(Number(roundedTick.toPrecision(10)));
+  }
+  
+  return ticks;
+}
+
 export function generatePoints(
   expressions: { id: string; expr: string; color: string; visible: boolean }[],
   xMin: number,

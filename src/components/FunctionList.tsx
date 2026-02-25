@@ -1,4 +1,4 @@
-import { Trash2, Eye, EyeOff, Plus, LayoutTemplate, X } from 'lucide-react';
+import { Trash2, Eye, EyeOff, Plus, LayoutTemplate, X, Code } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useState } from 'react';
 
@@ -135,52 +135,57 @@ export function FunctionList({
         {functions.map((func) => (
           <div
             key={func.id}
-            className="flex items-start gap-3 p-3 bg-white border border-gray-200 rounded-lg shadow-sm group hover:border-gray-300 transition-colors"
+            className="flex flex-col gap-2 p-3 bg-white border border-gray-200 rounded-lg shadow-sm group hover:border-gray-300 transition-all focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500"
           >
-            <div
-              className="w-4 h-4 rounded-full cursor-pointer shrink-0 border border-gray-200 mt-1.5"
-              style={{ backgroundColor: func.color }}
-              onClick={() => {
-                const currentIndex = COLORS.indexOf(func.color);
-                const nextColor = COLORS[(currentIndex + 1) % COLORS.length];
-                onUpdateFunction(func.id, { color: nextColor });
-              }}
-              title="Click to change color"
-            />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full cursor-pointer shrink-0 border border-gray-200 hover:scale-110 transition-transform"
+                  style={{ backgroundColor: func.color }}
+                  onClick={() => {
+                    const currentIndex = COLORS.indexOf(func.color);
+                    const nextColor = COLORS[(currentIndex + 1) % COLORS.length];
+                    onUpdateFunction(func.id, { color: nextColor });
+                  }}
+                  title="Click to change color"
+                />
+                <span className="text-xs font-medium text-gray-500 font-mono">f(x)</span>
+              </div>
+
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                <button
+                  onClick={() => onUpdateFunction(func.id, { visible: !func.visible })}
+                  className={cn(
+                    "p-1 rounded hover:bg-gray-100 transition-colors",
+                    func.visible ? "text-gray-400 hover:text-gray-600" : "text-gray-300"
+                  )}
+                  title={func.visible ? "Hide function" : "Show function"}
+                >
+                  {func.visible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                </button>
+                
+                <button
+                  onClick={() => onRemoveFunction(func.id)}
+                  className="p-1 text-gray-400 rounded hover:text-red-600 hover:bg-red-50 transition-colors"
+                  title="Remove function"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
             
-            <div className="flex-1 min-w-0 flex items-start gap-2">
-              <span className="text-gray-500 font-mono text-sm select-none mt-1">f(x) =</span>
+            <div className="relative">
               <textarea
                 value={func.expr}
                 onChange={(e) => onUpdateFunction(func.id, { expr: e.target.value })}
-                placeholder="e.g. sin(x) * x"
-                rows={Math.max(1, func.expr.split('\n').length)}
-                className="flex-1 min-w-0 bg-transparent border-none focus:ring-0 p-0 text-sm font-mono text-gray-900 placeholder:text-gray-400 resize-none leading-relaxed"
-                style={{ minHeight: '1.5rem' }}
+                placeholder="Enter expression..."
+                rows={Math.max(2, func.expr.split('\n').length)}
+                className="w-full bg-gray-50 border border-gray-200 rounded-md p-2 text-sm font-mono text-gray-900 placeholder:text-gray-400 resize-none focus:outline-none focus:bg-white transition-colors leading-relaxed"
+                spellCheck={false}
               />
-            </div>
-
-            <div className="flex items-center gap-1 mt-0.5">
-              <button
-                onClick={() => onUpdateFunction(func.id, { visible: !func.visible })}
-                className={cn(
-                  "p-1.5 rounded-md transition-colors",
-                  func.visible 
-                    ? "text-gray-400 hover:text-gray-600 hover:bg-gray-100" 
-                    : "text-gray-300 hover:text-gray-500 hover:bg-gray-50"
-                )}
-                title={func.visible ? "Hide function" : "Show function"}
-              >
-                {func.visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-              </button>
-              
-              <button
-                onClick={() => onRemoveFunction(func.id)}
-                className="p-1.5 text-gray-400 rounded-md hover:text-red-600 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                title="Remove function"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              <div className="absolute right-2 bottom-2 pointer-events-none">
+                <Code className="w-3 h-3 text-gray-300" />
+              </div>
             </div>
           </div>
         ))}

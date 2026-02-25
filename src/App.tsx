@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { FunctionList, FunctionItem } from './components/FunctionList';
 import { Graph } from './components/Graph';
 import { Controls } from './components/Controls';
 import { Documentation } from './components/Documentation';
 import { generatePoints } from './lib/mathUtils';
-import { Calculator, Github } from 'lucide-react';
+import { Calculator, Github, GripVertical } from 'lucide-react';
 
 const DEFAULT_X_DOMAIN: [number, number] = [-10, 10];
 const DEFAULT_Y_DOMAIN: [number, number] = [-10, 10];
@@ -18,6 +18,8 @@ export default function App() {
   const [functions, setFunctions] = useState<FunctionItem[]>(INITIAL_FUNCTIONS);
   const [xDomain, setXDomain] = useState<[number, number]>(DEFAULT_X_DOMAIN);
   const [yDomain, setYDomain] = useState<[number, number]>(DEFAULT_Y_DOMAIN);
+  const [sidebarWidth, setSidebarWidth] = useState(400);
+  const [isResizing, setIsResizing] = useState(false);
 
   const data = useMemo(() => {
     return generatePoints(functions, xDomain[0], xDomain[1], 500);
@@ -47,11 +49,38 @@ export default function App() {
     setYDomain(DEFAULT_Y_DOMAIN);
   };
 
+  // Sidebar resizing logic
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      
+      // Constrain width between 300px and 600px
+      const newWidth = Math.max(300, Math.min(600, e.clientX));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = 'default';
+    };
+
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 font-sans">
+    <div className="min-h-screen bg-gray-50 text-gray-900 font-sans flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shrink-0">
+        <div className="w-full px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-600 rounded-lg text-white">
               <Calculator className="w-6 h-6" />
@@ -75,10 +104,13 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Sidebar Controls */}
-          <div className="lg:col-span-4 space-y-6">
+      <main className="flex-1 flex overflow-hidden">
+        {/* Sidebar Controls */}
+        <div 
+          className="flex-shrink-0 bg-gray-50 border-r border-gray-200 overflow-y-auto"
+          style={{ width: sidebarWidth }}
+        >
+          <div className="p-6 space-y-6">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <FunctionList
                 functions={functions}
@@ -98,27 +130,35 @@ export default function App() {
 
             <Documentation />
           </div>
+        </div>
 
-          {/* Main Graph Area */}
-          <div className="lg:col-span-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-1 h-[600px]">
-              <Graph
-                data={data}
-                functions={functions}
-                xDomain={xDomain}
-                yDomain={yDomain}
-                onUpdateFunction={updateFunction}
-                onUpdateXDomain={setXDomain}
-                onUpdateYDomain={setYDomain}
-              />
-            </div>
+        {/* Resizer Handle */}
+        <div
+          className="w-1 bg-gray-200 hover:bg-blue-400 cursor-col-resize flex items-center justify-center transition-colors z-20"
+          onMouseDown={() => setIsResizing(true)}
+        >
+          <div className="h-8 w-1 bg-gray-400 rounded-full opacity-0 hover:opacity-100 transition-opacity" />
+        </div>
+
+        {/* Main Graph Area */}
+        <div className="flex-1 p-6 overflow-hidden bg-white">
+          <div className="w-full h-full bg-white rounded-xl shadow-sm border border-gray-200 p-1 relative">
+            <Graph
+              data={data}
+              functions={functions}
+              xDomain={xDomain}
+              yDomain={yDomain}
+              onUpdateFunction={updateFunction}
+              onUpdateXDomain={setXDomain}
+              onUpdateYDomain={setYDomain}
+            />
             
-            <div className="mt-4 flex items-center justify-between text-sm text-gray-500 px-2">
+            <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-2 rounded-lg border border-gray-200 text-xs text-gray-500 shadow-sm pointer-events-none">
               <p>
-                Showing {data.length} data points across x=[{xDomain[0]}, {xDomain[1]}]
+                Showing {data.length} data points across x=[{xDomain[0].toFixed(1)}, {xDomain[1].toFixed(1)}]
               </p>
-              <p>
-                Mouse over the graph to inspect values
+              <p className="mt-1">
+                Scroll to zoom • Drag to pan • Drag points to edit geometry
               </p>
             </div>
           </div>
