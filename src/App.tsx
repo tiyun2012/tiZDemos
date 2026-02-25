@@ -3,7 +3,7 @@ import { FunctionList, FunctionItem } from './components/FunctionList';
 import { Graph } from './components/Graph';
 import { Controls } from './components/Controls';
 import { Documentation } from './components/Documentation';
-import { generatePoints } from './lib/mathUtils';
+import { generatePoints, generateFunctionData, extractVariables, FunctionData, getDerivative } from './lib/mathUtils';
 import { Calculator, Github, GripVertical } from 'lucide-react';
 
 const DEFAULT_X_DOMAIN: [number, number] = [-10, 10];
@@ -21,10 +21,43 @@ export default function App() {
   const [gridDensity, setGridDensity] = useState(10);
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
+  const [parameters, setParameters] = useState<Record<string, number>>({});
+
+  // Extract variables from functions
+  useEffect(() => {
+    const newParams = { ...parameters };
+    let hasChanges = false;
+    const foundVars = new Set<string>();
+
+    functions.forEach(f => {
+      if (!f.visible) return;
+      const vars = extractVariables(f.expr);
+      vars.forEach(v => {
+        foundVars.add(v);
+        if (newParams[v] === undefined) {
+          newParams[v] = 1; // Default value
+          hasChanges = true;
+        }
+      });
+    });
+
+    if (hasChanges) {
+      setParameters(newParams);
+    }
+  }, [functions]);
 
   const data = useMemo(() => {
-    return generatePoints(functions, xDomain[0], xDomain[1], 500);
-  }, [functions, xDomain]);
+    return generatePoints(functions, xDomain[0], xDomain[1], 500, parameters);
+  }, [functions, xDomain, parameters]);
+
+  const functionDataMap = useMemo(() => {
+    const map: Record<string, FunctionData> = {};
+    functions.forEach(f => {
+      const data = generateFunctionData(f, xDomain, yDomain, parameters);
+      if (data) map[f.id] = data;
+    });
+    return map;
+  }, [functions, xDomain, yDomain, parameters]);
 
   const addFunction = (expr: string = '') => {
     const newId = Math.random().toString(36).substr(2, 9);
@@ -37,8 +70,36 @@ export default function App() {
     ]);
   };
 
+  const handleDataUpload = (content: string) => {
+    const lines = content.split('\n').filter(l => l.trim());
+    const points: string[] = [];
+    
+    lines.forEach(line => {
+      // Handle CSV or whitespace separated values
+      const parts = line.split(/[,\t]+/).map(p => parseFloat(p.trim()));
+      // Check if valid numbers
+      if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        points.push(`(${parts[0]}, ${parts[1]})`);
+      }
+    });
+    
+    if (points.length > 0) {
+      addFunction(points.join(', '));
+    }
+  };
+
   const updateFunction = (id: string, updates: Partial<FunctionItem>) => {
     setFunctions(functions.map((f) => (f.id === id ? { ...f, ...updates } : f)));
+  };
+
+  const differentiateFunction = (id: string) => {
+    const func = functions.find(f => f.id === id);
+    if (!func) return;
+    
+    const deriv = getDerivative(func.expr);
+    if (deriv) {
+      addFunction(deriv);
+    }
   };
 
   const removeFunction = (id: string) => {
@@ -118,6 +179,8 @@ export default function App() {
                 onAddFunction={addFunction}
                 onUpdateFunction={updateFunction}
                 onRemoveFunction={removeFunction}
+                onUploadData={handleDataUpload}
+                onDifferentiate={differentiateFunction}
               />
             </div>
 
@@ -129,6 +192,8 @@ export default function App() {
               gridDensity={gridDensity}
               onUpdateGridDensity={setGridDensity}
               onReset={resetView}
+              parameters={parameters}
+              onUpdateParameters={setParameters}
             />
 
             <Documentation />
@@ -149,6 +214,7 @@ export default function App() {
             <Graph
               data={data}
               functions={functions}
+              functionDataMap={functionDataMap}
               xDomain={xDomain}
               yDomain={yDomain}
               gridDensity={gridDensity}

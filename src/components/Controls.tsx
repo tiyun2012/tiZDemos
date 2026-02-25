@@ -8,6 +8,8 @@ interface ControlsProps {
   gridDensity: number;
   onUpdateGridDensity: (density: number) => void;
   onReset: () => void;
+  parameters: Record<string, number>;
+  onUpdateParameters: (params: Record<string, number>) => void;
 }
 
 export function Controls({
@@ -18,6 +20,8 @@ export function Controls({
   gridDensity,
   onUpdateGridDensity,
   onReset,
+  parameters,
+  onUpdateParameters,
 }: ControlsProps) {
   const handleZoom = (factor: number) => {
     const xMid = (xDomain[0] + xDomain[1]) / 2;
@@ -59,6 +63,29 @@ export function Controls({
       </div>
 
       <div className="space-y-4">
+        {Object.keys(parameters).length > 0 && (
+          <div className="space-y-4 pb-4 border-b border-gray-200">
+            <h4 className="text-xs font-semibold text-gray-900 uppercase tracking-wider">Parameters</h4>
+            {Object.entries(parameters).map(([name, value]) => (
+              <div key={name} className="space-y-1">
+                 <div className="flex justify-between">
+                  <label className="block text-xs font-medium text-gray-500 font-mono">{name}</label>
+                  <span className="text-xs text-gray-400 font-mono">{value.toFixed(2)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="-10"
+                  max="10"
+                  step="0.1"
+                  value={value}
+                  onChange={(e) => onUpdateParameters({ ...parameters, [name]: Number(e.target.value) })}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="space-y-2">
           <div className="flex justify-between">
             <label className="block text-xs font-medium text-gray-500 uppercase">Grid Density</label>

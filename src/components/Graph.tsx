@@ -11,13 +11,14 @@ import {
   Customized,
 } from 'recharts';
 import { FunctionItem } from './FunctionList';
-import { DataPoint, parseGeometry, formatGeometry, Geometry, getNiceTicks } from '../lib/mathUtils';
+import { DataPoint, parseGeometry, formatGeometry, Geometry, getNiceTicks, FunctionData } from '../lib/mathUtils';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import React from 'react';
 
 interface GraphProps {
   data: DataPoint[];
   functions: FunctionItem[];
+  functionDataMap: Record<string, FunctionData>;
   xDomain: [number, number];
   yDomain: [number, number];
   onUpdateFunction: (id: string, updates: Partial<FunctionItem>) => void;
@@ -57,6 +58,7 @@ const TickLabel = ({ cx, cy, axisType, tickValue }: any) => {
 export function Graph({ 
   data, 
   functions, 
+  functionDataMap,
   xDomain, 
   yDomain, 
   onUpdateFunction,
@@ -323,18 +325,60 @@ export function Graph({
             const isGeometry = parseGeometry(func.expr) !== null;
             if (isGeometry || !func.visible) return null;
             
-            return (
-              <Line
-                key={func.id}
-                type="monotone"
-                dataKey={func.id}
-                stroke={func.color}
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-                connectNulls={false}
-              />
-            );
+            const funcData = functionDataMap[func.id];
+            if (!funcData) return null;
+
+            if (funcData.type === 'explicit') {
+              return (
+                <Line
+                  key={func.id}
+                  type="monotone"
+                  dataKey={func.id}
+                  stroke={func.color}
+                  strokeWidth={2}
+                  dot={false}
+                  isAnimationActive={false}
+                  connectNulls={false}
+                />
+              );
+            } else if (funcData.type === 'parametric' || funcData.type === 'polar') {
+              return (
+                <Line
+                  key={func.id}
+                  data={funcData.points}
+                  type="monotone"
+                  dataKey="y"
+                  stroke={func.color}
+                  strokeWidth={2}
+                  dot={false}
+                  isAnimationActive={false}
+                  connectNulls={false}
+                />
+              );
+            } else if (funcData.type === 'implicit') {
+              // Flatten segments with nulls to break lines
+              // We use the last point's x for the null point to keep x-axis consistent, though it shouldn't matter much for null y
+              const flatPoints = funcData.segments?.flatMap(seg => [
+                seg[0], 
+                seg[1], 
+                { x: seg[1].x, y: null }
+              ]) || [];
+              
+              return (
+                <Line
+                  key={func.id}
+                  data={flatPoints}
+                  type="linear"
+                  dataKey="y"
+                  stroke={func.color}
+                  strokeWidth={2}
+                  dot={false}
+                  isAnimationActive={false}
+                  connectNulls={false}
+                />
+              );
+            }
+            return null;
           })}
 
           {/* Render Geometry (Points and Polygons) */}

@@ -1,6 +1,7 @@
-import { Trash2, Eye, EyeOff, Plus, LayoutTemplate, X, Code } from 'lucide-react';
+import { Trash2, Eye, EyeOff, Plus, LayoutTemplate, X, Code, Upload, GitBranch } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import React from 'react';
 
 export interface FunctionItem {
   id: string;
@@ -14,6 +15,8 @@ interface FunctionListProps {
   onAddFunction: (expr?: string) => void;
   onUpdateFunction: (id: string, updates: Partial<FunctionItem>) => void;
   onRemoveFunction: (id: string) => void;
+  onUploadData?: (data: string) => void;
+  onDifferentiate?: (id: string) => void;
 }
 
 const COLORS = [
@@ -62,6 +65,12 @@ const TEMPLATES = [
   // Scripting
   { name: 'Damped Sine (Vars)', expr: 'A = 2\nk = 5\ndecay = 0.2\nA * sin(k * x) * e^(-decay * x)', category: 'Scripting' },
   { name: 'Clamped Wave', expr: 'y = sin(x)\nlimit = 0.5\nmax(min(y, limit), -limit)', category: 'Scripting' },
+  // Advanced Types
+  { name: 'Circle (Implicit)', expr: 'x^2 + y^2 = 9', category: 'Advanced' },
+  { name: 'Heart (Implicit)', expr: '(x^2 + y^2 - 1)^3 - x^2 * y^3 = 0', category: 'Advanced' },
+  { name: 'Parametric Circle', expr: '(cos(t), sin(t))', category: 'Advanced' },
+  { name: 'Butterfly (Polar)', expr: 'r = e^sin(theta) - 2*cos(4*theta) + sin((2*theta - pi)/24)^5', category: 'Advanced' },
+  { name: 'Piecewise Syntax', expr: '{x < 0: x^2, x >= 0: x}', category: 'Piecewise' },
 ];
 
 export function FunctionList({
@@ -69,14 +78,48 @@ export function FunctionList({
   onAddFunction,
   onUpdateFunction,
   onRemoveFunction,
+  onUploadData,
+  onDifferentiate,
 }: FunctionListProps) {
   const [showTemplates, setShowTemplates] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content && onUploadData) {
+        onUploadData(content);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-900">Functions</h2>
         <div className="flex gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            accept=".csv,.txt"
+            onChange={handleFileUpload}
+          />
+          {onUploadData && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors border border-gray-200"
+              title="Upload CSV Data"
+            >
+              <Upload className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={() => setShowTemplates(!showTemplates)}
             className={cn(
@@ -164,6 +207,16 @@ export function FunctionList({
                   {func.visible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                 </button>
                 
+                {onDifferentiate && (
+                  <button
+                    onClick={() => onDifferentiate(func.id)}
+                    className="p-1 text-gray-400 rounded hover:text-purple-600 hover:bg-purple-50 transition-colors"
+                    title="Calculate Derivative"
+                  >
+                    <GitBranch className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
                 <button
                   onClick={() => onRemoveFunction(func.id)}
                   className="p-1 text-gray-400 rounded hover:text-red-600 hover:bg-red-50 transition-colors"
