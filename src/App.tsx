@@ -18,6 +18,7 @@ export default function App() {
   const [functions, setFunctions] = useState<FunctionItem[]>(INITIAL_FUNCTIONS);
   const [xDomain, setXDomain] = useState<[number, number]>(DEFAULT_X_DOMAIN);
   const [yDomain, setYDomain] = useState<[number, number]>(DEFAULT_Y_DOMAIN);
+  const [gridDensity, setGridDensity] = useState(10);
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
 
@@ -125,6 +126,8 @@ export default function App() {
               yDomain={yDomain}
               onUpdateXDomain={setXDomain}
               onUpdateYDomain={setYDomain}
+              gridDensity={gridDensity}
+              onUpdateGridDensity={setGridDensity}
               onReset={resetView}
             />
 
@@ -148,6 +151,7 @@ export default function App() {
               functions={functions}
               xDomain={xDomain}
               yDomain={yDomain}
+              gridDensity={gridDensity}
               onUpdateFunction={updateFunction}
               onUpdateXDomain={setXDomain}
               onUpdateYDomain={setYDomain}

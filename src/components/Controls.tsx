@@ -5,6 +5,8 @@ interface ControlsProps {
   yDomain: [number, number];
   onUpdateXDomain: (domain: [number, number]) => void;
   onUpdateYDomain: (domain: [number, number]) => void;
+  gridDensity: number;
+  onUpdateGridDensity: (density: number) => void;
   onReset: () => void;
 }
 
@@ -13,6 +15,8 @@ export function Controls({
   yDomain,
   onUpdateXDomain,
   onUpdateYDomain,
+  gridDensity,
+  onUpdateGridDensity,
   onReset,
 }: ControlsProps) {
   const handleZoom = (factor: number) => {
@@ -54,7 +58,24 @@ export function Controls({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <div className="flex justify-between">
+            <label className="block text-xs font-medium text-gray-500 uppercase">Grid Density</label>
+            <span className="text-xs text-gray-400">{gridDensity} ticks</span>
+          </div>
+          <input
+            type="range"
+            min="5"
+            max="20"
+            step="1"
+            value={gridDensity}
+            onChange={(e) => onUpdateGridDensity(Number(e.target.value))}
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <label className="block text-xs font-medium text-gray-500 uppercase">X Axis</label>
           <div className="flex items-center gap-2">
@@ -91,6 +112,7 @@ export function Controls({
               className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
+        </div>
         </div>
       </div>
     </div>

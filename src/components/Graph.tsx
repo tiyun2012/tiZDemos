@@ -23,6 +23,7 @@ interface GraphProps {
   onUpdateFunction: (id: string, updates: Partial<FunctionItem>) => void;
   onUpdateXDomain: (domain: [number, number]) => void;
   onUpdateYDomain: (domain: [number, number]) => void;
+  gridDensity: number;
 }
 
 const MARGIN = { top: 20, right: 30, left: 0, bottom: 20 };
@@ -60,7 +61,8 @@ export function Graph({
   yDomain, 
   onUpdateFunction,
   onUpdateXDomain,
-  onUpdateYDomain 
+  onUpdateYDomain,
+  gridDensity
 }: GraphProps) {
   const [dragging, setDragging] = useState<{ id: string; pointIndex: number } | null>(null);
   const [panning, setPanning] = useState<{ startX: number; startY: number; startXDomain: [number, number]; startYDomain: [number, number] } | null>(null);
@@ -70,8 +72,8 @@ export function Graph({
   const isOriginXVisible = yDomain[0] <= 0 && yDomain[1] >= 0;
   const isOriginYVisible = xDomain[0] <= 0 && xDomain[1] >= 0;
 
-  const xTicks = useMemo(() => getNiceTicks(xDomain[0], xDomain[1], 10), [xDomain]);
-  const yTicks = useMemo(() => getNiceTicks(yDomain[0], yDomain[1], 10), [yDomain]);
+  const xTicks = useMemo(() => getNiceTicks(xDomain[0], xDomain[1], gridDensity), [xDomain, gridDensity]);
+  const yTicks = useMemo(() => getNiceTicks(yDomain[0], yDomain[1], gridDensity), [yDomain, gridDensity]);
 
   // Zoom handling
   useEffect(() => {
@@ -267,7 +269,7 @@ export function Graph({
             dataKey="x"
             type="number"
             domain={xDomain}
-            tickCount={10}
+            ticks={xTicks}
             allowDataOverflow
             stroke="#9ca3af"
             tick={!isOriginXVisible ? { fontSize: 11, fill: '#6b7280' } : false}
@@ -278,6 +280,7 @@ export function Graph({
           <YAxis
             type="number"
             domain={yDomain}
+            ticks={yTicks}
             allowDataOverflow
             stroke="#9ca3af"
             tick={!isOriginYVisible ? { fontSize: 11, fill: '#6b7280' } : false}
