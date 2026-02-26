@@ -1,9 +1,9 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { FunctionList, FunctionItem } from './components/FunctionList';
 import { Graph } from './components/Graph';
 import { Controls } from './components/Controls';
 import { Documentation } from './components/Documentation';
-import { generatePoints, generateFunctionData, extractVariables, FunctionData, getDerivative } from './lib/mathUtils';
+import { generatePoints, generateFunctionData, extractVariables, FunctionData, getDerivative, detectFunctionType } from './lib/mathUtils';
 import { Calculator, Github, GripVertical } from 'lucide-react';
 
 const DEFAULT_X_DOMAIN: [number, number] = [-10, 10];
@@ -14,6 +14,12 @@ const INITIAL_FUNCTIONS: FunctionItem[] = [
   { id: '2', expr: 'sin(x)', color: '#ef4444', visible: true },
 ];
 
+const IMPLICIT_REGEN_DEBOUNCE_MS = 180;
+
+function domainsEqual(a: [number, number], b: [number, number], epsilon: number = 1e-9): boolean {
+  return Math.abs(a[0] - b[0]) <= epsilon && Math.abs(a[1] - b[1]) <= epsilon;
+}
+
 export default function App() {
   const [functions, setFunctions] = useState<FunctionItem[]>(INITIAL_FUNCTIONS);
   const [xDomain, setXDomain] = useState<[number, number]>(DEFAULT_X_DOMAIN);
@@ -22,6 +28,10 @@ export default function App() {
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
   const [parameters, setParameters] = useState<Record<string, number>>({});
+  const [aspectLocked, setAspectLocked] = useState(true);
+  const [isGraphInteracting, setIsGraphInteracting] = useState(false);
+  const [implicitXDomain, setImplicitXDomain] = useState<[number, number]>(DEFAULT_X_DOMAIN);
+  const [implicitYDomain, setImplicitYDomain] = useState<[number, number]>(DEFAULT_Y_DOMAIN);
 
   // Extract variables from functions
   useEffect(() => {
@@ -50,14 +60,55 @@ export default function App() {
     return generatePoints(functions, xDomain[0], xDomain[1], 500, parameters);
   }, [functions, xDomain, parameters]);
 
-  const functionDataMap = useMemo(() => {
+  const hasVisibleImplicit = useMemo(() => {
+    return functions.some((f) => f.visible && detectFunctionType(f.expr) === 'implicit');
+  }, [functions]);
+
+  useEffect(() => {
+    if (!hasVisibleImplicit) {
+      setImplicitXDomain((prev) => (domainsEqual(prev, xDomain) ? prev : xDomain));
+      setImplicitYDomain((prev) => (domainsEqual(prev, yDomain) ? prev : yDomain));
+      return;
+    }
+
+    if (isGraphInteracting) return;
+
+    const timer = window.setTimeout(() => {
+      setImplicitXDomain((prev) => (domainsEqual(prev, xDomain) ? prev : xDomain));
+      setImplicitYDomain((prev) => (domainsEqual(prev, yDomain) ? prev : yDomain));
+    }, IMPLICIT_REGEN_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [xDomain, yDomain, isGraphInteracting, hasVisibleImplicit]);
+
+  const nonImplicitDataMap = useMemo(() => {
     const map: Record<string, FunctionData> = {};
     functions.forEach(f => {
+      if (detectFunctionType(f.expr) === 'implicit') return;
       const data = generateFunctionData(f, xDomain, yDomain, parameters);
       if (data) map[f.id] = data;
     });
     return map;
   }, [functions, xDomain, yDomain, parameters]);
+
+  const implicitDataMap = useMemo(() => {
+    const map: Record<string, FunctionData> = {};
+    if (!hasVisibleImplicit) return map;
+
+    functions.forEach(f => {
+      if (detectFunctionType(f.expr) !== 'implicit') return;
+      const data = generateFunctionData(f, implicitXDomain, implicitYDomain, parameters);
+      if (data) map[f.id] = data;
+    });
+
+    return map;
+  }, [functions, implicitXDomain, implicitYDomain, parameters, hasVisibleImplicit]);
+
+  const functionDataMap = useMemo(() => {
+    return { ...nonImplicitDataMap, ...implicitDataMap };
+  }, [nonImplicitDataMap, implicitDataMap]);
+
+  const isImplicitStale = hasVisibleImplicit && (!domainsEqual(implicitXDomain, xDomain) || !domainsEqual(implicitYDomain, yDomain));
 
   const addFunction = (expr: string = '') => {
     const newId = Math.random().toString(36).substr(2, 9);
@@ -191,6 +242,8 @@ export default function App() {
               onUpdateYDomain={setYDomain}
               gridDensity={gridDensity}
               onUpdateGridDensity={setGridDensity}
+              aspectLocked={aspectLocked}
+              onToggleAspectLocked={setAspectLocked}
               onReset={resetView}
               parameters={parameters}
               onUpdateParameters={setParameters}
@@ -221,6 +274,8 @@ export default function App() {
               onUpdateFunction={updateFunction}
               onUpdateXDomain={setXDomain}
               onUpdateYDomain={setYDomain}
+              aspectLocked={aspectLocked}
+              onInteractionChange={setIsGraphInteracting}
             />
             
             <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-2 rounded-lg border border-gray-200 text-xs text-gray-500 shadow-sm pointer-events-none">
@@ -230,6 +285,11 @@ export default function App() {
               <p className="mt-1">
                 Scroll to zoom • Drag to pan • Drag points to edit geometry
               </p>
+              {isImplicitStale && (
+                <p className="mt-1 text-blue-600">
+                  Rendering implicit curves...
+                </p>
+              )}
             </div>
           </div>
         </div>

@@ -8,11 +8,13 @@ import {
   ResponsiveContainer,
   ReferenceLine,
   ReferenceDot,
-  Customized,
+  useXAxisDomain,
+  useYAxisDomain,
+  usePlotArea,
 } from 'recharts';
 import { FunctionItem } from './FunctionList';
-import { DataPoint, parseGeometry, formatGeometry, Geometry, getNiceTicks, FunctionData } from '../lib/mathUtils';
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { DataPoint, parseGeometry, formatGeometry, Geometry, getNiceTicks, FunctionData, buildPolylinesFromSegments } from '../lib/mathUtils';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import React from 'react';
 
 interface GraphProps {
@@ -25,11 +27,15 @@ interface GraphProps {
   onUpdateXDomain: (domain: [number, number]) => void;
   onUpdateYDomain: (domain: [number, number]) => void;
   gridDensity: number;
+  aspectLocked: boolean;
+  onInteractionChange?: (isInteracting: boolean) => void;
 }
 
 const MARGIN = { top: 20, right: 30, left: 0, bottom: 20 };
 const Y_AXIS_WIDTH = 50;
 const X_AXIS_HEIGHT = 30;
+const MIN_DOMAIN_SPAN = 1e-6;
+const MAX_DOMAIN_SPAN = 1e6;
 
 const TickLabel = ({ cx, cy, axisType, tickValue }: any) => {
   if (Math.abs(tickValue) < 1e-10) return null;
@@ -55,6 +61,78 @@ const TickLabel = ({ cx, cy, axisType, tickValue }: any) => {
   }
 };
 
+const CustomFunctionLayer = React.memo(({ functions, functionDataMap }: { functions: FunctionItem[], functionDataMap: Record<string, FunctionData> }) => {
+  const xDomain = useXAxisDomain();
+  const yDomain = useYAxisDomain();
+  const plotArea = usePlotArea();
+
+  if (!xDomain || !yDomain || !plotArea) return null;
+
+  const getX = (x: number) => plotArea.x + ((x - (xDomain[0] as number)) / ((xDomain[1] as number) - (xDomain[0] as number))) * plotArea.width;
+  const getY = (y: number) => plotArea.y + plotArea.height - ((y - (yDomain[0] as number)) / ((yDomain[1] as number) - (yDomain[0] as number))) * plotArea.height;
+
+  return (
+    <g>
+      {functions.map((func) => {
+        if (!func.visible) return null;
+        const funcData = functionDataMap[func.id];
+        if (!funcData) return null;
+
+        if (funcData.type === 'implicit') {
+          const polylines = funcData.polylines ?? buildPolylinesFromSegments(funcData.segments);
+          const pathData = polylines
+            .map((line) => {
+              let path = '';
+              for (let i = 0; i < line.length; i++) {
+                const x = getX(line[i].x);
+                const y = getY(line[i].y);
+                if (!isFinite(x) || !isFinite(y)) continue;
+                path += `${i === 0 ? 'M' : ' L'}${x},${y}`;
+              }
+              return path;
+            })
+            .filter(Boolean)
+            .join(' ');
+          
+          return (
+            <path
+              key={func.id}
+              d={pathData}
+              stroke={func.color}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          );
+        } else if (funcData.type === 'parametric' || funcData.type === 'polar') {
+          const pathData = funcData.points?.map((p, i) => {
+            const x = getX(p.x);
+            const y = getY(p.y);
+            
+            if (!isFinite(x) || !isFinite(y)) return '';
+            
+            return `${i === 0 ? 'M' : 'L'}${x},${y}`;
+          }).filter(Boolean).join(' ');
+          
+          return (
+            <path
+              key={func.id}
+              d={pathData}
+              stroke={func.color}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          );
+        }
+        return null;
+      })}
+    </g>
+  );
+});
+
 export function Graph({ 
   data, 
   functions, 
@@ -64,7 +142,9 @@ export function Graph({
   onUpdateFunction,
   onUpdateXDomain,
   onUpdateYDomain,
-  gridDensity
+  gridDensity,
+  aspectLocked,
+  onInteractionChange
 }: GraphProps) {
   const [dragging, setDragging] = useState<{ id: string; pointIndex: number } | null>(null);
   const [panning, setPanning] = useState<{ startX: number; startY: number; startXDomain: [number, number]; startYDomain: [number, number] } | null>(null);
@@ -77,6 +157,112 @@ export function Graph({
   const xTicks = useMemo(() => getNiceTicks(xDomain[0], xDomain[1], gridDensity), [xDomain, gridDensity]);
   const yTicks = useMemo(() => getNiceTicks(yDomain[0], yDomain[1], gridDensity), [yDomain, gridDensity]);
 
+  const domainRefs = useRef({ x: xDomain, y: yDomain });
+  const pendingDomainRef = useRef<{ x: [number, number]; y: [number, number] } | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const interactionRefs = useRef({ wheel: false, pan: false });
+  const interactionActiveRef = useRef(false);
+  const wheelInteractionTimeoutRef = useRef<number | null>(null);
+
+  const syncInteractionState = useCallback(() => {
+    const nextActive = interactionRefs.current.wheel || interactionRefs.current.pan;
+    if (interactionActiveRef.current === nextActive) return;
+    interactionActiveRef.current = nextActive;
+    onInteractionChange?.(nextActive);
+  }, [onInteractionChange]);
+
+  const flushDomainUpdate = () => {
+    const pending = pendingDomainRef.current;
+    frameRef.current = null;
+    if (!pending) return;
+
+    pendingDomainRef.current = null;
+    onUpdateXDomain(pending.x);
+    onUpdateYDomain(pending.y);
+  };
+
+  const scheduleDomainUpdate = (nextX: [number, number], nextY: [number, number]) => {
+    domainRefs.current = { x: nextX, y: nextY };
+    pendingDomainRef.current = { x: nextX, y: nextY };
+
+    if (frameRef.current !== null) return;
+    frameRef.current = requestAnimationFrame(flushDomainUpdate);
+  };
+
+  useEffect(() => {
+    domainRefs.current = { x: xDomain, y: yDomain };
+  }, [xDomain, yDomain]);
+
+  useEffect(() => {
+    return () => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current);
+      }
+      if (wheelInteractionTimeoutRef.current !== null) {
+        window.clearTimeout(wheelInteractionTimeoutRef.current);
+      }
+      interactionRefs.current.wheel = false;
+      interactionRefs.current.pan = false;
+      if (interactionActiveRef.current) {
+        interactionActiveRef.current = false;
+        onInteractionChange?.(false);
+      }
+    };
+  }, [onInteractionChange]);
+
+  // Enforce 1:1 aspect ratio on resize or domain change
+  useEffect(() => {
+    if (!aspectLocked) return;
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    const enforceAspectRatio = () => {
+      if (interactionActiveRef.current) return;
+
+      const rect = container.getBoundingClientRect();
+      const chartWidth = rect.width - MARGIN.left - MARGIN.right - Y_AXIS_WIDTH;
+      const chartHeight = rect.height - MARGIN.top - MARGIN.bottom - X_AXIS_HEIGHT;
+      
+      if (chartWidth <= 0 || chartHeight <= 0) return;
+
+      const currentX = domainRefs.current.x;
+      const currentY = domainRefs.current.y;
+      
+      const xRange = currentX[1] - currentX[0];
+      const currentYRange = currentY[1] - currentY[0];
+      
+      // Calculate what the Y range should be to maintain 1:1 aspect ratio
+      const targetYRange = xRange * (chartHeight / chartWidth);
+      
+      // If the current Y range is significantly different from the target, update it
+      // Use a small epsilon to prevent infinite loops from floating point math
+      if (Math.abs(currentYRange - targetYRange) > 1e-3) {
+        const yCenter = (currentY[0] + currentY[1]) / 2;
+        const newYDomain: [number, number] = [
+          yCenter - targetYRange / 2,
+          yCenter + targetYRange / 2
+        ];
+        
+        domainRefs.current.y = newYDomain;
+        onUpdateYDomain(newYDomain);
+      }
+    };
+
+    // Run once on mount and whenever xDomain changes
+    enforceAspectRatio();
+
+    const resizeObserver = new ResizeObserver(() => {
+      enforceAspectRatio();
+    });
+
+    resizeObserver.observe(container);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [aspectLocked, xDomain, onUpdateYDomain]);
+
   // Zoom handling
   useEffect(() => {
     const container = containerRef.current;
@@ -84,6 +270,15 @@ export function Graph({
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
+      interactionRefs.current.wheel = true;
+      syncInteractionState();
+      if (wheelInteractionTimeoutRef.current !== null) {
+        window.clearTimeout(wheelInteractionTimeoutRef.current);
+      }
+      wheelInteractionTimeoutRef.current = window.setTimeout(() => {
+        interactionRefs.current.wheel = false;
+        syncInteractionState();
+      }, 180);
 
       const rect = container.getBoundingClientRect();
       const chartWidth = rect.width - MARGIN.left - MARGIN.right - Y_AXIS_WIDTH;
@@ -100,22 +295,45 @@ export function Graph({
       // deltaY > 0 is scroll down (zoom out), deltaY < 0 is scroll up (zoom in)
       const zoomFactor = Math.exp(e.deltaY * 0.001);
 
-      const xRange = xDomain[1] - xDomain[0];
-      const yRange = yDomain[1] - yDomain[0];
+      const currentX = domainRefs.current.x;
+      const currentY = domainRefs.current.y;
+
+      const xRange = currentX[1] - currentX[0];
+      const yRange = currentY[1] - currentY[0];
+      if (xRange <= 0 || yRange <= 0) return;
 
       // Point under mouse in domain coordinates
-      const mouseDomainX = xDomain[0] + (mouseX / chartWidth) * xRange;
-      const mouseDomainY = yDomain[1] - (mouseY / chartHeight) * yRange;
+      const mouseDomainX = currentX[0] + (mouseX / chartWidth) * xRange;
+      const mouseDomainY = currentY[1] - (mouseY / chartHeight) * yRange;
+
+      const clampRatio = (ratio: number) => Math.max(0, Math.min(1, ratio));
+      const clampSpan = (span: number) => Math.max(MIN_DOMAIN_SPAN, Math.min(MAX_DOMAIN_SPAN, span));
+      const xLeftRatio = clampRatio((mouseDomainX - currentX[0]) / xRange);
+      const yBottomRatio = clampRatio((mouseDomainY - currentY[0]) / yRange);
 
       // Calculate new domains keeping the point under mouse stationary
-      const newXMin = mouseDomainX - (mouseDomainX - xDomain[0]) * zoomFactor;
-      const newXMax = mouseDomainX + (xDomain[1] - mouseDomainX) * zoomFactor;
+      let newXMin = mouseDomainX - (mouseDomainX - currentX[0]) * zoomFactor;
+      let newXMax = mouseDomainX + (currentX[1] - mouseDomainX) * zoomFactor;
 
-      const newYMin = mouseDomainY - (mouseDomainY - yDomain[0]) * zoomFactor;
-      const newYMax = mouseDomainY + (yDomain[1] - mouseDomainY) * zoomFactor;
+      let newYMin = mouseDomainY - (mouseDomainY - currentY[0]) * zoomFactor;
+      let newYMax = mouseDomainY + (currentY[1] - mouseDomainY) * zoomFactor;
 
-      onUpdateXDomain([newXMin, newXMax]);
-      onUpdateYDomain([newYMin, newYMax]);
+      const nextXSpan = clampSpan(newXMax - newXMin);
+      const nextYSpan = clampSpan(newYMax - newYMin);
+      const xRightRatio = 1 - xLeftRatio;
+      const yTopRatio = 1 - yBottomRatio;
+
+      newXMin = mouseDomainX - xLeftRatio * nextXSpan;
+      newXMax = mouseDomainX + xRightRatio * nextXSpan;
+      newYMin = mouseDomainY - yBottomRatio * nextYSpan;
+      newYMax = mouseDomainY + yTopRatio * nextYSpan;
+
+      if (!isFinite(newXMin) || !isFinite(newXMax) || !isFinite(newYMin) || !isFinite(newYMax)) return;
+
+      const nextX: [number, number] = [newXMin, newXMax];
+      const nextY: [number, number] = [newYMin, newYMax];
+
+      scheduleDomainUpdate(nextX, nextY);
     };
 
     container.addEventListener('wheel', handleWheel, { passive: false });
@@ -123,7 +341,7 @@ export function Graph({
     return () => {
       container.removeEventListener('wheel', handleWheel);
     };
-  }, [xDomain, yDomain, onUpdateXDomain, onUpdateYDomain]);
+  }, [syncInteractionState]);
 
   // Custom tooltip to show values for all visible functions at the hovered x
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -167,6 +385,9 @@ export function Graph({
     // Middle mouse button is 1
     if (e.button === 1) {
       e.preventDefault();
+      e.stopPropagation();
+      interactionRefs.current.pan = true;
+      syncInteractionState();
       setPanning({
         startX: e.clientX,
         startY: e.clientY,
@@ -227,12 +448,10 @@ export function Graph({
       // Drag down -> move view up (increase domain, because Y is inverted on screen)
       const dyDomain = (dyPixels / chartHeight) * yRange;
 
-      onUpdateXDomain([
+      scheduleDomainUpdate([
         panning.startXDomain[0] - dxDomain,
         panning.startXDomain[1] - dxDomain
-      ]);
-
-      onUpdateYDomain([
+      ], [
         panning.startYDomain[0] + dyDomain,
         panning.startYDomain[1] + dyDomain
       ]);
@@ -241,6 +460,10 @@ export function Graph({
 
   const handleMouseUp = () => {
     setDragging(null);
+    if (panning) {
+      interactionRefs.current.pan = false;
+      syncInteractionState();
+    }
     setPanning(null);
   };
 
@@ -320,66 +543,30 @@ export function Graph({
             />
           ))}
 
-          {/* Render Functions */}
+          {/* Render Explicit Functions via Line (for tooltip support) */}
           {functions.map((func) => {
             const isGeometry = parseGeometry(func.expr) !== null;
             if (isGeometry || !func.visible) return null;
             
             const funcData = functionDataMap[func.id];
-            if (!funcData) return null;
+            if (!funcData || funcData.type !== 'explicit') return null;
 
-            if (funcData.type === 'explicit') {
-              return (
-                <Line
-                  key={func.id}
-                  type="monotone"
-                  dataKey={func.id}
-                  stroke={func.color}
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                  connectNulls={false}
-                />
-              );
-            } else if (funcData.type === 'parametric' || funcData.type === 'polar') {
-              return (
-                <Line
-                  key={func.id}
-                  data={funcData.points}
-                  type="monotone"
-                  dataKey="y"
-                  stroke={func.color}
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                  connectNulls={false}
-                />
-              );
-            } else if (funcData.type === 'implicit') {
-              // Flatten segments with nulls to break lines
-              // We use the last point's x for the null point to keep x-axis consistent, though it shouldn't matter much for null y
-              const flatPoints = funcData.segments?.flatMap(seg => [
-                seg[0], 
-                seg[1], 
-                { x: seg[1].x, y: null }
-              ]) || [];
-              
-              return (
-                <Line
-                  key={func.id}
-                  data={flatPoints}
-                  type="linear"
-                  dataKey="y"
-                  stroke={func.color}
-                  strokeWidth={2}
-                  dot={false}
-                  isAnimationActive={false}
-                  connectNulls={false}
-                />
-              );
-            }
-            return null;
+            return (
+              <Line
+                key={func.id}
+                type="monotone"
+                dataKey={func.id}
+                stroke={func.color}
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+                connectNulls={false}
+              />
+            );
           })}
+
+          {/* Render Parametric, Polar, and Implicit Functions via CustomFunctionLayer */}
+          <CustomFunctionLayer functions={functions} functionDataMap={functionDataMap} />
 
           {/* Render Geometry (Points and Polygons) */}
           {geometryItems.map((item) => {
@@ -396,8 +583,12 @@ export function Graph({
                   strokeWidth={2}
                   isFront={true}
                   className="cursor-move hover:fill-gray-100"
-                  onMouseDown={(e) => {
-                    e.stopPropagation();
+                  onMouseDown={(e: any, event?: any) => {
+                    if (e && typeof e.stopPropagation === 'function') {
+                      e.stopPropagation();
+                    } else if (event && typeof event.stopPropagation === 'function') {
+                      event.stopPropagation();
+                    }
                     handlePointMouseDown(item.id, 0);
                   }}
                 />
@@ -438,8 +629,12 @@ export function Graph({
                         stroke={item.color}
                         strokeWidth={2}
                         className="cursor-move hover:fill-gray-100"
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
+                        onMouseDown={(e: any, event?: any) => {
+                          if (e && typeof e.stopPropagation === 'function') {
+                            e.stopPropagation();
+                          } else if (event && typeof event.stopPropagation === 'function') {
+                            event.stopPropagation();
+                          }
                           handlePointMouseDown(item.id, realIndex);
                         }}
                       />

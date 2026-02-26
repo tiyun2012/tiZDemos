@@ -7,6 +7,8 @@ interface ControlsProps {
   onUpdateYDomain: (domain: [number, number]) => void;
   gridDensity: number;
   onUpdateGridDensity: (density: number) => void;
+  aspectLocked: boolean;
+  onToggleAspectLocked: (locked: boolean) => void;
   onReset: () => void;
   parameters: Record<string, number>;
   onUpdateParameters: (params: Record<string, number>) => void;
@@ -19,6 +21,8 @@ export function Controls({
   onUpdateYDomain,
   gridDensity,
   onUpdateGridDensity,
+  aspectLocked,
+  onToggleAspectLocked,
   onReset,
   parameters,
   onUpdateParameters,
@@ -100,6 +104,21 @@ export function Controls({
             onChange={(e) => onUpdateGridDensity(Number(e.target.value))}
             className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
           />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <label className="block text-xs font-medium text-gray-500 uppercase">Aspect Lock</label>
+          <button
+            type="button"
+            onClick={() => onToggleAspectLocked(!aspectLocked)}
+            className={`px-2 py-1 text-xs rounded border transition-colors ${
+              aspectLocked
+                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                : 'bg-gray-50 text-gray-600 border-gray-200'
+            }`}
+          >
+            {aspectLocked ? '1:1 Locked' : 'Unlocked'}
+          </button>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
