@@ -73,7 +73,7 @@ const TEMPLATES = [
   { name: 'Piecewise Syntax', expr: '{x < 0: x^2, x >= 0: x}', category: 'Piecewise' },
 ];
 
-export function FunctionList({
+function FunctionListComponent({
   functions,
   onAddFunction,
   onUpdateFunction,
@@ -252,3 +252,6 @@ export function FunctionList({
     </div>
   );
 }
+
+export const FunctionList = React.memo(FunctionListComponent);
+FunctionList.displayName = 'FunctionList';

@@ -1,10 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { FunctionList, FunctionItem } from './components/FunctionList';
 import { Graph } from './components/Graph';
 import { Controls } from './components/Controls';
 import { Documentation } from './components/Documentation';
 import { generatePoints, generateFunctionData, extractVariables, FunctionData, getDerivative, detectFunctionType } from './lib/mathUtils';
-import { Calculator, Github, GripVertical } from 'lucide-react';
+import { Calculator, Github } from 'lucide-react';
 
 const DEFAULT_X_DOMAIN: [number, number] = [-10, 10];
 const DEFAULT_Y_DOMAIN: [number, number] = [-10, 10];
@@ -15,9 +15,16 @@ const INITIAL_FUNCTIONS: FunctionItem[] = [
 ];
 
 const IMPLICIT_REGEN_DEBOUNCE_MS = 180;
+const ANIMATION_FPS_FAST = 60;
+const ANIMATION_FPS_IMPLICIT = 24;
+const TIME_SYMBOL_REGEX = /\btime\b/;
 
 function domainsEqual(a: [number, number], b: [number, number], epsilon: number = 1e-9): boolean {
   return Math.abs(a[0] - b[0]) <= epsilon && Math.abs(a[1] - b[1]) <= epsilon;
+}
+
+function usesTimeSymbol(expr: string): boolean {
+  return TIME_SYMBOL_REGEX.test(expr);
 }
 
 export default function App() {
@@ -32,6 +39,98 @@ export default function App() {
   const [isGraphInteracting, setIsGraphInteracting] = useState(false);
   const [implicitXDomain, setImplicitXDomain] = useState<[number, number]>(DEFAULT_X_DOMAIN);
   const [implicitYDomain, setImplicitYDomain] = useState<[number, number]>(DEFAULT_Y_DOMAIN);
+  const [timeSeconds, setTimeSeconds] = useState(0);
+
+  const timingMeta = useMemo(() => {
+    const nonImplicitStaticFunctions: FunctionItem[] = [];
+    const nonImplicitAnimatedFunctions: FunctionItem[] = [];
+    const implicitStaticFunctions: FunctionItem[] = [];
+    const implicitAnimatedFunctions: FunctionItem[] = [];
+
+    let hasTimeDrivenExplicit = false;
+
+    functions.forEach((f) => {
+      if (!f.visible) return;
+
+      const usesTime = usesTimeSymbol(f.expr);
+      const type = detectFunctionType(f.expr);
+
+      if (type === 'implicit') {
+        if (usesTime) {
+          implicitAnimatedFunctions.push(f);
+        } else {
+          implicitStaticFunctions.push(f);
+        }
+        return;
+      }
+
+      if (usesTime) {
+        nonImplicitAnimatedFunctions.push(f);
+      } else {
+        nonImplicitStaticFunctions.push(f);
+      }
+
+      if (type === 'explicit' && usesTime) {
+        hasTimeDrivenExplicit = true;
+      }
+    });
+
+    const hasTimeDrivenNonImplicit = nonImplicitAnimatedFunctions.length > 0;
+    const hasTimeDrivenImplicit = implicitAnimatedFunctions.length > 0;
+    const hasTimeDrivenFunction = hasTimeDrivenNonImplicit || hasTimeDrivenImplicit;
+    const hasVisibleImplicit = implicitStaticFunctions.length > 0 || implicitAnimatedFunctions.length > 0;
+
+    return {
+      nonImplicitStaticFunctions,
+      nonImplicitAnimatedFunctions,
+      implicitStaticFunctions,
+      implicitAnimatedFunctions,
+      hasTimeDrivenFunction,
+      hasTimeDrivenExplicit,
+      hasTimeDrivenNonImplicit,
+      hasTimeDrivenImplicit,
+      hasVisibleImplicit
+    };
+  }, [functions]);
+
+  const {
+    nonImplicitStaticFunctions,
+    nonImplicitAnimatedFunctions,
+    implicitStaticFunctions,
+    implicitAnimatedFunctions,
+    hasTimeDrivenFunction,
+    hasTimeDrivenExplicit,
+    hasTimeDrivenNonImplicit,
+    hasTimeDrivenImplicit,
+    hasVisibleImplicit
+  } = timingMeta;
+
+  useEffect(() => {
+    if (!hasTimeDrivenFunction) return;
+
+    const animationFps = hasTimeDrivenImplicit ? ANIMATION_FPS_IMPLICIT : ANIMATION_FPS_FAST;
+    let rafId = 0;
+    let lastEmit = 0;
+    const frameBudgetMs = 1000 / animationFps;
+    const start = performance.now() - timeSeconds * 1000;
+
+    const tick = (now: number) => {
+      if (now - lastEmit >= frameBudgetMs) {
+        setTimeSeconds((now - start) / 1000);
+        lastEmit = now;
+      }
+      rafId = window.requestAnimationFrame(tick);
+    };
+
+    rafId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(rafId);
+  }, [hasTimeDrivenFunction, hasTimeDrivenImplicit]);
+
+  const animatedParameters = useMemo(() => {
+    return { ...parameters, time: timeSeconds };
+  }, [parameters, timeSeconds]);
+
+  const explicitEvalParameters = hasTimeDrivenExplicit ? animatedParameters : parameters;
 
   // Extract variables from functions
   useEffect(() => {
@@ -51,18 +150,21 @@ export default function App() {
       });
     });
 
+    Object.keys(newParams).forEach((key) => {
+      if (!foundVars.has(key)) {
+        delete newParams[key];
+        hasChanges = true;
+      }
+    });
+
     if (hasChanges) {
       setParameters(newParams);
     }
   }, [functions]);
 
   const data = useMemo(() => {
-    return generatePoints(functions, xDomain[0], xDomain[1], 500, parameters);
-  }, [functions, xDomain, parameters]);
-
-  const hasVisibleImplicit = useMemo(() => {
-    return functions.some((f) => f.visible && detectFunctionType(f.expr) === 'implicit');
-  }, [functions]);
+    return generatePoints(functions, xDomain[0], xDomain[1], 500, explicitEvalParameters);
+  }, [functions, xDomain, explicitEvalParameters]);
 
   useEffect(() => {
     if (!hasVisibleImplicit) {
@@ -81,47 +183,74 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [xDomain, yDomain, isGraphInteracting, hasVisibleImplicit]);
 
-  const nonImplicitDataMap = useMemo(() => {
+  const nonImplicitStaticDataMap = useMemo(() => {
     const map: Record<string, FunctionData> = {};
-    functions.forEach(f => {
-      if (detectFunctionType(f.expr) === 'implicit') return;
+    nonImplicitStaticFunctions.forEach(f => {
       const data = generateFunctionData(f, xDomain, yDomain, parameters);
       if (data) map[f.id] = data;
     });
     return map;
-  }, [functions, xDomain, yDomain, parameters]);
+  }, [nonImplicitStaticFunctions, xDomain, yDomain, parameters]);
 
-  const implicitDataMap = useMemo(() => {
+  const nonImplicitAnimatedDataMap = useMemo(() => {
+    const map: Record<string, FunctionData> = {};
+    if (!hasTimeDrivenNonImplicit) return map;
+
+    nonImplicitAnimatedFunctions.forEach(f => {
+      const data = generateFunctionData(f, xDomain, yDomain, animatedParameters);
+      if (data) map[f.id] = data;
+    });
+
+    return map;
+  }, [nonImplicitAnimatedFunctions, xDomain, yDomain, animatedParameters, hasTimeDrivenNonImplicit]);
+
+  const implicitStaticDataMap = useMemo(() => {
     const map: Record<string, FunctionData> = {};
     if (!hasVisibleImplicit) return map;
 
-    functions.forEach(f => {
-      if (detectFunctionType(f.expr) !== 'implicit') return;
+    implicitStaticFunctions.forEach(f => {
       const data = generateFunctionData(f, implicitXDomain, implicitYDomain, parameters);
       if (data) map[f.id] = data;
     });
 
     return map;
-  }, [functions, implicitXDomain, implicitYDomain, parameters, hasVisibleImplicit]);
+  }, [implicitStaticFunctions, implicitXDomain, implicitYDomain, parameters, hasVisibleImplicit]);
+
+  const implicitAnimatedDataMap = useMemo(() => {
+    const map: Record<string, FunctionData> = {};
+    if (!hasTimeDrivenImplicit) return map;
+
+    implicitAnimatedFunctions.forEach(f => {
+      const data = generateFunctionData(f, implicitXDomain, implicitYDomain, animatedParameters);
+      if (data) map[f.id] = data;
+    });
+
+    return map;
+  }, [implicitAnimatedFunctions, implicitXDomain, implicitYDomain, animatedParameters, hasTimeDrivenImplicit]);
 
   const functionDataMap = useMemo(() => {
-    return { ...nonImplicitDataMap, ...implicitDataMap };
-  }, [nonImplicitDataMap, implicitDataMap]);
+    return {
+      ...nonImplicitStaticDataMap,
+      ...nonImplicitAnimatedDataMap,
+      ...implicitStaticDataMap,
+      ...implicitAnimatedDataMap
+    };
+  }, [nonImplicitStaticDataMap, nonImplicitAnimatedDataMap, implicitStaticDataMap, implicitAnimatedDataMap]);
 
   const isImplicitStale = hasVisibleImplicit && (!domainsEqual(implicitXDomain, xDomain) || !domainsEqual(implicitYDomain, yDomain));
 
-  const addFunction = (expr: string = '') => {
+  const addFunction = useCallback((expr: string = '') => {
     const newId = Math.random().toString(36).substr(2, 9);
     const colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
     const randomColor = colors[Math.floor(Math.random() * colors.length)];
     
-    setFunctions([
-      ...functions,
+    setFunctions((prev) => [
+      ...prev,
       { id: newId, expr, color: randomColor, visible: true },
     ]);
-  };
+  }, []);
 
-  const handleDataUpload = (content: string) => {
+  const handleDataUpload = useCallback((content: string) => {
     const lines = content.split('\n').filter(l => l.trim());
     const points: string[] = [];
     
@@ -137,13 +266,13 @@ export default function App() {
     if (points.length > 0) {
       addFunction(points.join(', '));
     }
-  };
+  }, [addFunction]);
 
-  const updateFunction = (id: string, updates: Partial<FunctionItem>) => {
-    setFunctions(functions.map((f) => (f.id === id ? { ...f, ...updates } : f)));
-  };
+  const updateFunction = useCallback((id: string, updates: Partial<FunctionItem>) => {
+    setFunctions((prev) => prev.map((f) => (f.id === id ? { ...f, ...updates } : f)));
+  }, []);
 
-  const differentiateFunction = (id: string) => {
+  const differentiateFunction = useCallback((id: string) => {
     const func = functions.find(f => f.id === id);
     if (!func) return;
     
@@ -151,16 +280,16 @@ export default function App() {
     if (deriv) {
       addFunction(deriv);
     }
-  };
+  }, [functions, addFunction]);
 
-  const removeFunction = (id: string) => {
-    setFunctions(functions.filter((f) => f.id !== id));
-  };
+  const removeFunction = useCallback((id: string) => {
+    setFunctions((prev) => prev.filter((f) => f.id !== id));
+  }, []);
 
-  const resetView = () => {
+  const resetView = useCallback(() => {
     setXDomain(DEFAULT_X_DOMAIN);
     setYDomain(DEFAULT_Y_DOMAIN);
-  };
+  }, []);
 
   // Sidebar resizing logic
   useEffect(() => {

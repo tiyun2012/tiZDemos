@@ -1,4 +1,5 @@
 import { RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
+import React from 'react';
 
 interface ControlsProps {
   xDomain: [number, number];
@@ -14,7 +15,7 @@ interface ControlsProps {
   onUpdateParameters: (params: Record<string, number>) => void;
 }
 
-export function Controls({
+function ControlsComponent({
   xDomain,
   yDomain,
   onUpdateXDomain,
@@ -164,3 +165,6 @@ export function Controls({
     </div>
   );
 }
+
+export const Controls = React.memo(ControlsComponent);
+Controls.displayName = 'Controls';

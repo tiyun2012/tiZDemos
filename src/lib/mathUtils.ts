@@ -104,11 +104,15 @@ export function extractVariables(expr: string): string[] {
     const node = parse(cleanExpr);
     const variables = new Set<string>();
     
-    node.traverse((node: any) => {
+    node.traverse((node: any, _path: string, parent: any) => {
       if (node.isSymbolNode) {
         const name = node.name;
+        // Skip symbols used as function identifiers, e.g. "mod" in mod(x, 2)
+        if (parent?.isFunctionNode && parent.fn === node) {
+          return;
+        }
         // Filter out standard variables and constants
-        if (!['x', 'y', 't', 'theta', 'r', 'pi', 'e', 'phi', 'tau', 'Infinity', 'sqrt', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'log', 'exp', 'abs', 'max', 'min', 'sign'].includes(name)) {
+        if (!['x', 'y', 't', 'theta', 'r', 'pi', 'e', 'phi', 'tau', 'Infinity', 'sqrt', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'log', 'exp', 'abs', 'max', 'min', 'sign', 'mod', 'time'].includes(name)) {
           variables.add(name);
         }
       }
@@ -165,30 +169,90 @@ export function formatGeometry(geometry: Geometry): string {
     .join(', ');
 }
 
-export function getNiceTicks(min: number, max: number, count: number = 10): number[] {
-  if (min === max) return [min];
-  
-  const range = max - min;
-  const roughStep = range / (count - 1);
-  const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
-  const normalizedStep = roughStep / magnitude;
-  
-  let step;
-  if (normalizedStep < 1.5) step = 1 * magnitude;
-  else if (normalizedStep < 3) step = 2 * magnitude;
-  else if (normalizedStep < 7.5) step = 5 * magnitude;
-  else step = 10 * magnitude;
-  
-  const start = Math.ceil(min / step) * step;
-  const end = Math.floor(max / step) * step;
-  
-  const ticks: number[] = [];
-  for (let t = start; t <= end + step / 1000; t += step) {
-    const roundedTick = Math.round(t / step) * step;
-    ticks.push(Number(roundedTick.toPrecision(10)));
+export interface NiceTickData {
+  ticks: number[];
+  step: number;
+}
+
+function computeNiceStep(roughStep: number): number {
+  const safeRoughStep = Math.max(Math.abs(roughStep), 1e-12);
+  const magnitude = Math.pow(10, Math.floor(Math.log10(safeRoughStep)));
+  const normalizedStep = safeRoughStep / magnitude;
+
+  if (normalizedStep < 1.5) return 1 * magnitude;
+  if (normalizedStep < 3) return 2 * magnitude;
+  if (normalizedStep < 7.5) return 5 * magnitude;
+  return 10 * magnitude;
+}
+
+export function getNiceTickData(
+  min: number,
+  max: number,
+  count: number = 10,
+  preferredStep?: number
+): NiceTickData {
+  if (!isFinite(min) || !isFinite(max) || min === max) {
+    return { ticks: [min], step: 1 };
   }
-  
-  return ticks;
+
+  const safeCount = Math.max(2, Math.floor(count));
+  const range = max - min;
+  const roughStep = Math.abs(range) / (safeCount - 1);
+  const baseStep = computeNiceStep(roughStep);
+
+  const buildTicksForStep = (stepValue: number): number[] => {
+    const epsilon = stepValue * 1e-9;
+    const start = Math.ceil((min - epsilon) / stepValue) * stepValue;
+    const end = Math.floor((max + epsilon) / stepValue) * stepValue;
+
+    const ticks: number[] = [];
+    for (let t = start; t <= end + stepValue / 1000; t += stepValue) {
+      const roundedTick = Math.round(t / stepValue) * stepValue;
+      const snapped = Math.abs(roundedTick) < 1e-12 ? 0 : roundedTick;
+      ticks.push(Number(snapped.toPrecision(12)));
+    }
+    return ticks;
+  };
+
+  let step = baseStep;
+  let ticks = buildTicksForStep(step);
+  const minDesiredTicks = Math.max(4, Math.floor(safeCount * 0.6));
+  const maxDesiredTicks = Math.max(minDesiredTicks + 2, Math.ceil(safeCount * 2.4));
+
+  // Hysteresis: keep prior step only if it does not starve/overcrowd the grid.
+  if (preferredStep && isFinite(preferredStep) && preferredStep > 0) {
+    const upperThreshold = preferredStep * 1.8;
+    const lowerThreshold = preferredStep * 0.55;
+    if (roughStep <= upperThreshold && roughStep >= lowerThreshold) {
+      const preferredTicks = buildTicksForStep(preferredStep);
+      if (preferredTicks.length >= minDesiredTicks && preferredTicks.length <= maxDesiredTicks) {
+        step = preferredStep;
+        ticks = preferredTicks;
+      }
+    }
+  }
+
+  // Guarantee at least a few visible grid lines.
+  if (ticks.length < 2) {
+    const finerStep = computeNiceStep(roughStep / 2);
+    step = finerStep;
+    ticks = buildTicksForStep(step);
+  }
+
+  return { ticks, step };
+}
+
+export function getNiceTicks(min: number, max: number, count: number = 10): number[] {
+  return getNiceTickData(min, max, count).ticks;
+}
+
+export function formatTickValue(value: number, step: number): string {
+  const safeStep = Math.max(Math.abs(step), 1e-12);
+  const log10Step = Math.log10(safeStep);
+  const baseDecimals = safeStep >= 1 ? 0 : Math.ceil(-log10Step);
+  const decimals = Math.max(0, Math.min(8, baseDecimals + 1));
+  const snapped = Math.abs(value) < safeStep * 1e-9 ? 0 : value;
+  return Number(snapped.toFixed(decimals)).toString();
 }
 
 export function smoothPolyline(points: PlotPoint[], iterations: number = 2): PlotPoint[] {

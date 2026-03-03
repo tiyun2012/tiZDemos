@@ -1,8 +1,8 @@
 import { ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { cn } from '../lib/utils';
 
-export function Documentation() {
+function DocumentationComponent() {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -66,3 +66,6 @@ export function Documentation() {
     </div>
   );
 }
+
+export const Documentation = React.memo(DocumentationComponent);
+Documentation.displayName = 'Documentation';

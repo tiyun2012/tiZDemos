@@ -13,7 +13,7 @@ import {
   usePlotArea,
 } from 'recharts';
 import { FunctionItem } from './FunctionList';
-import { DataPoint, parseGeometry, formatGeometry, Geometry, getNiceTicks, FunctionData, buildPolylinesFromSegments } from '../lib/mathUtils';
+import { DataPoint, parseGeometry, formatGeometry, Geometry, getNiceTickData, formatTickValue, FunctionData, buildPolylinesFromSegments } from '../lib/mathUtils';
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import React from 'react';
 
@@ -37,7 +37,7 @@ const X_AXIS_HEIGHT = 30;
 const MIN_DOMAIN_SPAN = 1e-6;
 const MAX_DOMAIN_SPAN = 1e6;
 
-const TickLabel = ({ cx, cy, axisType, tickValue }: any) => {
+const TickLabel = ({ cx, cy, axisType, tickValue, tickStep }: any) => {
   if (Math.abs(tickValue) < 1e-10) return null;
 
   if (axisType === 'x') {
@@ -45,7 +45,7 @@ const TickLabel = ({ cx, cy, axisType, tickValue }: any) => {
       <g>
         <line x1={cx} y1={cy} x2={cx} y2={cy + 5} stroke="#6b7280" strokeWidth={1} />
         <text x={cx} y={cy + 18} textAnchor="middle" fontSize={11} fill="#6b7280" className="font-mono">
-          {Number(tickValue).toFixed(1).replace(/\.0$/, '')}
+          {formatTickValue(Number(tickValue), Number(tickStep) || 1)}
         </text>
       </g>
     );
@@ -54,7 +54,7 @@ const TickLabel = ({ cx, cy, axisType, tickValue }: any) => {
       <g>
         <line x1={cx} y1={cy} x2={cx - 5} y2={cy} stroke="#6b7280" strokeWidth={1} />
         <text x={cx - 8} y={cy + 4} textAnchor="end" fontSize={11} fill="#6b7280" className="font-mono">
-          {Number(tickValue).toFixed(1).replace(/\.0$/, '')}
+          {formatTickValue(Number(tickValue), Number(tickStep) || 1)}
         </text>
       </g>
     );
@@ -153,9 +153,25 @@ export function Graph({
   // Check if origin is visible to toggle default axes
   const isOriginXVisible = yDomain[0] <= 0 && yDomain[1] >= 0;
   const isOriginYVisible = xDomain[0] <= 0 && xDomain[1] >= 0;
+  const xTickStepRef = useRef<number | undefined>(undefined);
+  const yTickStepRef = useRef<number | undefined>(undefined);
 
-  const xTicks = useMemo(() => getNiceTicks(xDomain[0], xDomain[1], gridDensity), [xDomain, gridDensity]);
-  const yTicks = useMemo(() => getNiceTicks(yDomain[0], yDomain[1], gridDensity), [yDomain, gridDensity]);
+  const xTickData = useMemo(() => {
+    const next = getNiceTickData(xDomain[0], xDomain[1], gridDensity, xTickStepRef.current);
+    xTickStepRef.current = next.step;
+    return next;
+  }, [xDomain, gridDensity]);
+
+  const yTickData = useMemo(() => {
+    const next = getNiceTickData(yDomain[0], yDomain[1], gridDensity, yTickStepRef.current);
+    yTickStepRef.current = next.step;
+    return next;
+  }, [yDomain, gridDensity]);
+
+  const xTicks = xTickData.ticks;
+  const yTicks = yTickData.ticks;
+  const xTickFormatter = useCallback((value: number) => formatTickValue(Number(value), xTickData.step), [xTickData.step]);
+  const yTickFormatter = useCallback((value: number) => formatTickValue(Number(value), yTickData.step), [yTickData.step]);
 
   const domainRefs = useRef({ x: xDomain, y: yDomain });
   const pendingDomainRef = useRef<{ x: [number, number]; y: [number, number] } | null>(null);
@@ -489,7 +505,7 @@ export function Graph({
           data={data}
           margin={MARGIN}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#d1d5db" strokeWidth={1} />
           <XAxis
             dataKey="x"
             type="number"
@@ -497,8 +513,9 @@ export function Graph({
             ticks={xTicks}
             allowDataOverflow
             stroke="#9ca3af"
-            tick={!isOriginXVisible ? { fontSize: 11, fill: '#6b7280' } : false}
-            tickFormatter={(val) => Number(val).toFixed(1)}
+            tick={!isOriginXVisible ? { fontSize: 11, fill: '#6b7280' } : { fontSize: 11, fill: 'transparent' }}
+            tickLine={!isOriginXVisible}
+            tickFormatter={xTickFormatter}
             height={X_AXIS_HEIGHT}
             axisLine={!isOriginXVisible}
           />
@@ -508,8 +525,9 @@ export function Graph({
             ticks={yTicks}
             allowDataOverflow
             stroke="#9ca3af"
-            tick={!isOriginYVisible ? { fontSize: 11, fill: '#6b7280' } : false}
-            tickFormatter={(val) => Number(val).toFixed(1)}
+            tick={!isOriginYVisible ? { fontSize: 11, fill: '#6b7280' } : { fontSize: 11, fill: 'transparent' }}
+            tickLine={!isOriginYVisible}
+            tickFormatter={yTickFormatter}
             width={Y_AXIS_WIDTH}
             axisLine={!isOriginYVisible}
           />
@@ -526,7 +544,7 @@ export function Graph({
               x={tick} 
               y={0} 
               r={0} 
-              shape={(props: any) => <TickLabel {...props} axisType="x" tickValue={tick} />} 
+              shape={(props: any) => <TickLabel {...props} axisType="x" tickValue={tick} tickStep={xTickData.step} />} 
               isFront={true}
             />
           ))}
@@ -538,7 +556,7 @@ export function Graph({
               x={0} 
               y={tick} 
               r={0} 
-              shape={(props: any) => <TickLabel {...props} axisType="y" tickValue={tick} />} 
+              shape={(props: any) => <TickLabel {...props} axisType="y" tickValue={tick} tickStep={yTickData.step} />} 
               isFront={true}
             />
           ))}
