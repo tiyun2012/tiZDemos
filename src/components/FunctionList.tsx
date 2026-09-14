@@ -30,10 +30,26 @@ const COLORS = [
   '#84cc16', // lime-500
 ];
 
-const TEMPLATES = [
+interface FunctionTemplate {
+  name: string;
+  expr: string;
+  category: string;
+  description?: string;
+}
+
+const TEMPLATES: FunctionTemplate[] = [
   { name: 'Linear', expr: '2*x + 1', category: 'Basic' },
   { name: 'Quadratic', expr: 'x^2 - 4', category: 'Basic' },
   { name: 'Cubic', expr: 'x^3 - 2*x', category: 'Basic' },
+  // Function examples: keep the result scalar so it can be plotted as f(x).
+  { name: 'Dot Product', expr: 'dot([x, 1], [2, 3])', category: 'Function Examples', description: 'dot(a, b) → scalar' },
+  { name: 'Vector Length', expr: 'norm([x, 3])', category: 'Function Examples', description: 'norm(v) → vector magnitude' },
+  { name: 'Clamp (-1 to 1)', expr: 'max(-1, min(1, x))', category: 'Function Examples', description: 'Clamp with nested min/max' },
+  { name: 'Minimum', expr: 'min(sin(x), 0.5)', category: 'Function Examples', description: 'min(a, b)' },
+  { name: 'Maximum', expr: 'max(sin(x), -0.5)', category: 'Function Examples', description: 'max(a, b)' },
+  { name: 'Modulo', expr: 'mod(x, 2)', category: 'Function Examples', description: 'mod(value, divisor)' },
+  { name: 'Fractional Part', expr: 'x - floor(x)', category: 'Function Examples', description: 'Build fract(x) with floor' },
+  { name: 'Sign', expr: 'sign(x)', category: 'Function Examples', description: 'Returns -1, 0, or 1' },
   { name: 'Sine Wave', expr: 'sin(x)', category: 'Trigonometry' },
   { name: 'Cosine Wave', expr: 'cos(x)', category: 'Trigonometry' },
   { name: 'Tangent', expr: 'tan(x)', category: 'Trigonometry' },
@@ -72,6 +88,8 @@ const TEMPLATES = [
   { name: 'Butterfly (Polar)', expr: 'r = e^sin(theta) - 2*cos(4*theta) + sin((2*theta - pi)/24)^5', category: 'Advanced' },
   { name: 'Piecewise Syntax', expr: '{x < 0: x^2, x >= 0: x}', category: 'Piecewise' },
 ];
+
+const TEMPLATE_CATEGORIES = Array.from(new Set(TEMPLATES.map((template) => template.category)));
 
 function FunctionListComponent({
   functions,
@@ -154,22 +172,40 @@ function FunctionListComponent({
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
-            {TEMPLATES.map((template) => (
-              <button
-                key={template.name}
-                onClick={() => {
-                  onAddFunction(template.expr);
-                  setShowTemplates(false);
-                }}
-                className="text-left px-3 py-2 text-sm rounded-md hover:bg-blue-50 hover:text-blue-700 transition-colors border border-transparent hover:border-blue-100 group"
-              >
-                <div className="font-medium">{template.name}</div>
-                <div className="text-xs text-gray-500 group-hover:text-blue-600 font-mono truncate">
-                  {template.expr.split('\n')[0]}
-                </div>
-              </button>
-            ))}
+          <div className="max-h-80 overflow-y-auto pr-1 space-y-4">
+            {TEMPLATE_CATEGORIES.map((category) => {
+              const categoryTemplates = TEMPLATES.filter((template) => template.category === category);
+
+              return (
+                <section key={category}>
+                  <div className="sticky top-0 z-10 mb-1.5 bg-white/95 py-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400 backdrop-blur-sm">
+                    {category}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {categoryTemplates.map((template) => (
+                      <button
+                        key={`${template.category}-${template.name}`}
+                        onClick={() => {
+                          onAddFunction(template.expr);
+                          setShowTemplates(false);
+                        }}
+                        className="text-left px-3 py-2 text-sm rounded-md hover:bg-blue-50 hover:text-blue-700 transition-colors border border-transparent hover:border-blue-100 group"
+                      >
+                        <div className="font-medium">{template.name}</div>
+                        <div className="text-xs text-gray-500 group-hover:text-blue-600 font-mono truncate">
+                          {template.expr.split('\n')[0]}
+                        </div>
+                        {template.description && (
+                          <div className="mt-1 text-[11px] text-gray-400 group-hover:text-blue-500">
+                            {template.description}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
           </div>
         </div>
       )}

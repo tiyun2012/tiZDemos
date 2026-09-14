@@ -17,7 +17,7 @@
     "better-sqlite3": "^12.4.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
-    "express": "^4.22.3",
+    "express": "^4.21.2",
     "lucide-react": "^0.546.0",
     "mathjs": "^15.1.1",
     "motion": "^12.23.24",
@@ -35,11 +35,5 @@
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
-  },
-  "allowScripts": {
-    "better-sqlite3@12.6.2": true,
-    "esbuild@0.27.2": true,
-    "esbuild@0.25.12": true,
-    "protobufjs@7.6.6": true
   }
 }
