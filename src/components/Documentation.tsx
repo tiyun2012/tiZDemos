@@ -26,7 +26,7 @@ function DocumentationComponent() {
       >
         <div className="p-4 space-y-4 text-sm text-gray-600 border-t border-gray-200">
           <p>
-            Enter mathematical expressions using standard notation. The variable must be <code>x</code>.
+            Enter mathematical expressions using standard notation. Use <code>x</code> as the independent variable; extra symbols such as <code>a</code> or <code>speed</code> become shared parameters.
           </p>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -37,8 +37,10 @@ function DocumentationComponent() {
                 <li>Functions: <code>sin, cos, tan, log, sqrt</code> (also <code>√</code>)</li>
                 <li>Constants: <code>pi, e</code> (also <code>π</code>)</li>
                 <li>Logic: <code>x &lt; 0 ? -1 : 1</code> (Piecewise)</li>
-                <li>Geometry: <code>(x, y)</code> or <code>(x1, y1), (x2, y2)</code></li>
+                <li>Geometry: <code>(x, y)</code>, labeled <code>A = (x, y)</code> / <code>A(x, y)</code>, or multiple named points</li>
                 <li>ML/Shader: <code>max, min, floor, mod, tanh</code></li>
+                <li>Vectors: <code>dot([x, 1], [2, 3])</code>, <code>norm([x, 3])</code></li>
+                <li>Visual debug: <code>sdSegment((ax, ay), (bx, by), (px, py))</code></li>
                 <li>Scripting: Define variables on separate lines. Last line is result.</li>
               </ul>
             </div>
@@ -52,18 +54,26 @@ function DocumentationComponent() {
                 <li>1 / (1 + e^-x) (Sigmoid)</li>
                 <li>x - floor(x) (Fract)</li>
                 <li>(1, 2) (Point)</li>
+                <li>A = (1, 1.2) (Labeled point)</li>
+                <li>A = (-2,-1), B = (2,.5) (Labeled segment)</li>
+                <li>sdSegment((-2,-1), (2,.5), (.5,2))</li>
               </ul>
             </div>
           </div>
 
           <div className="pt-2 border-t border-gray-100">
             <p className="text-xs text-gray-500">
-              Powered by <strong>mathjs</strong>. Complex numbers are not supported.
+              Powered by <strong>mathjs</strong>. Debug visualizations use a small app-level visualization layer on top of the same graph coordinates.
             </p>
           </div>
         </div>
       </div>
-    </div>
+    
+      <div className="space-y-2">
+        <h3 className="font-semibold text-gray-900">Shader visualizations</h3>
+        <p className="text-sm text-gray-600">Use Templates → Shader Visuals for interactive lineMask, circleMask, patchPoint, and drawLine teaching views.</p>
+      </div>
+</div>
   );
 }
 

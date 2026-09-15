@@ -2,6 +2,7 @@ import { Trash2, Eye, EyeOff, Plus, LayoutTemplate, X, Code, Upload, GitBranch }
 import { cn } from '../lib/utils';
 import { useState, useRef } from 'react';
 import React from 'react';
+import { detectFunctionType } from '../lib/mathUtils';
 
 export interface FunctionItem {
   id: string;
@@ -50,6 +51,14 @@ const TEMPLATES: FunctionTemplate[] = [
   { name: 'Modulo', expr: 'mod(x, 2)', category: 'Function Examples', description: 'mod(value, divisor)' },
   { name: 'Fractional Part', expr: 'x - floor(x)', category: 'Function Examples', description: 'Build fract(x) with floor' },
   { name: 'Sign', expr: 'sign(x)', category: 'Function Examples', description: 'Returns -1, 0, or 1' },
+  // Interactive debug visualizations. A, B and P can be dragged directly in the graph.
+  { name: 'SDF Segment Debug', expr: 'sdSegment((-2, -1), (2, 0.5), (0.5, 2))', category: 'Visual Debug', description: 'Drag A, B, P • projection + clamp + distance' },
+  { name: 'SDF Clamp Before A', expr: 'sdSegment((-2, -1), (2, 0.5), (-4, 1.5))', category: 'Visual Debug', description: 'Shows raw t < 0 → h = 0' },
+  { name: 'SDF Clamp After B', expr: 'sdSegment((-2, -1), (2, 0.5), (4, 2.5))', category: 'Visual Debug', description: 'Shows raw t > 1 → h = 1' },
+  { name: 'Line Mask', expr: 'lineMask((0.5, 0.4), (-2, -1), (2, 0.5), 0.35, 0.2)', category: 'Shader Visuals', description: 'Drag P/A/B • core width + AA falloff + mask value' },
+  { name: 'Circle Mask', expr: 'circleMask((1.55, 0.3), (0, 0), 1.5, 0.25)', category: 'Shader Visuals', description: 'Drag P/center • radius + AA ring + mask value' },
+  { name: 'Bilinear Patch Point', expr: 'patchPoint((-2, 1.5), (2, 1.2), (-1.5, -1.5), (2.5, -1), 0.35, 0.65)', category: 'Shader Visuals', description: 'Drag four corners • top/bottom mix then final mix' },
+  { name: 'drawLine Mask Stage', expr: 'drawLine((0.5, 0.4), (-2, -1), (2, 0.5), 0.35, 0.2)', category: 'Shader Visuals', description: 'Visualizes m used by mix(color, lineColor, m)' },
   { name: 'Sine Wave', expr: 'sin(x)', category: 'Trigonometry' },
   { name: 'Cosine Wave', expr: 'cos(x)', category: 'Trigonometry' },
   { name: 'Tangent', expr: 'tan(x)', category: 'Trigonometry' },
@@ -60,8 +69,11 @@ const TEMPLATES: FunctionTemplate[] = [
   { name: 'Square Wave', expr: 'sign(sin(x))', category: 'Advanced' },
   { name: 'Gaussian', expr: 'e^(-x^2)', category: 'Advanced' },
   { name: 'Point', expr: '(2, 3)', category: 'Geometry' },
+  { name: 'Labeled Point', expr: 'A = (2, 3)', category: 'Geometry', description: 'Named point; label follows the point when dragged' },
   { name: 'Line Segment', expr: '(-2, -2), (2, 2)', category: 'Geometry' },
+  { name: 'Labeled Segment', expr: 'A = (-2, -1), B = (2, 1)', category: 'Geometry', description: 'Named segment endpoints' },
   { name: 'Triangle', expr: '(0, 0), (2, 0), (1, 2)', category: 'Geometry' },
+  { name: 'Labeled Triangle', expr: 'A = (0, 0), B = (2, 0), C = (1, 2)', category: 'Geometry', description: 'Labels each polygon vertex' },
   { name: 'Square', expr: '(0, 0), (2, 0), (2, 2), (0, 2)', category: 'Geometry' },
   // Machine Learning
   { name: 'Sigmoid', expr: '1 / (1 + e^-x)', category: 'Machine Learning' },
@@ -228,7 +240,9 @@ function FunctionListComponent({
                   }}
                   title="Click to change color"
                 />
-                <span className="text-xs font-medium text-gray-500 font-mono">f(x)</span>
+                <span className="text-xs font-medium text-gray-500 font-mono">
+                  {detectFunctionType(func.expr) === 'visualization' ? 'viz' : detectFunctionType(func.expr) === 'geometry' ? 'geo' : 'f(x)'}
+                </span>
               </div>
 
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
@@ -243,7 +257,7 @@ function FunctionListComponent({
                   {func.visible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                 </button>
                 
-                {onDifferentiate && (
+                {onDifferentiate && detectFunctionType(func.expr) === 'explicit' && (
                   <button
                     onClick={() => onDifferentiate(func.id)}
                     className="p-1 text-gray-400 rounded hover:text-purple-600 hover:bg-purple-50 transition-colors"

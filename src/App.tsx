@@ -412,7 +412,7 @@ export default function App() {
                 Showing {data.length} data points across x=[{xDomain[0].toFixed(1)}, {xDomain[1].toFixed(1)}]
               </p>
               <p className="mt-1">
-                Scroll to zoom • Drag to pan • Drag points to edit geometry
+                Scroll to zoom • Middle-drag to pan • Drag points to edit geometry / debug inputs
               </p>
               {isImplicitStale && (
                 <p className="mt-1 text-blue-600">

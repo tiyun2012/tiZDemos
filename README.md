@@ -1,20 +1,23 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# tiZDemos shader visual patch
 
-# Run and deploy your AI Studio app
+Copy `src/` over the repo version that already contains the earlier Visual Debug + labeled geometry patches.
 
-This contains everything you need to run your app locally.
+Then run:
 
-View your app in AI Studio: https://ai.studio/apps/0768756f-6fa3-4ca6-b503-c5f95ee45f3f
+```powershell
+npm run lint
+npm run dev
+```
 
-## Run Locally
+Open **Templates → Shader Visuals**.
 
-**Prerequisites:**  Node.js
+Try:
 
+```text
+lineMask((0.5, 0.4), (-2, -1), (2, 0.5), 0.35, 0.2)
+circleMask((1.55, 0.3), (0, 0), 1.5, 0.25)
+patchPoint((-2, 1.5), (2, 1.2), (-1.5, -1.5), (2.5, -1), 0.35, 0.65)
+drawLine((0.5, 0.4), (-2, -1), (2, 0.5), 0.35, 0.2)
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+The point arguments are draggable in the graph. Edit scalar arguments in the function field to compare `width`, `aa`, `radius`, `u`, and `v`.

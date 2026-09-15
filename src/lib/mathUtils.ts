@@ -1,16 +1,23 @@
 import { compile, parse, derivative } from 'mathjs';
+import { parseVisualization } from './visualization';
 
 export interface DataPoint {
   x: number;
   [key: string]: number | null;
 }
 
-export interface Geometry {
-  type: 'point' | 'polygon';
-  points: { x: number; y: number }[];
+export interface GeometryPoint {
+  x: number;
+  y: number;
+  label?: string;
 }
 
-export type FunctionType = 'explicit' | 'parametric' | 'polar' | 'implicit' | 'geometry';
+export interface Geometry {
+  type: 'point' | 'polygon';
+  points: GeometryPoint[];
+}
+
+export type FunctionType = 'explicit' | 'parametric' | 'polar' | 'implicit' | 'geometry' | 'visualization';
 
 export interface FunctionData {
   type: FunctionType;
@@ -77,6 +84,10 @@ export function normalizeExpression(expr: string): string {
 export function detectFunctionType(expr: string): FunctionType {
   const normalized = normalizeExpression(expr);
   
+  // Debug / teaching visualizations must be detected before geometry, because
+  // their syntax can contain coordinate tuples.
+  if (parseVisualization(normalized)) return 'visualization';
+
   // Geometry
   if (parseGeometry(normalized)) return 'geometry';
   
@@ -95,8 +106,9 @@ export function detectFunctionType(expr: string): FunctionType {
 export function extractVariables(expr: string): string[] {
   try {
     const normalized = normalizeExpression(expr);
-    // Skip if it's a geometry definition
-    if (parseGeometry(normalized)) return [];
+    // Geometry and debug visualizations own their coordinates rather than
+    // exposing them as scalar function parameters.
+    if (parseVisualization(normalized) || parseGeometry(normalized)) return [];
 
     // Handle equations (implicit/polar) by parsing right side or both sides
     const cleanExpr = normalized.replace(/^(y|r)\s*=\s*/, '').replace('=', '-');
@@ -140,21 +152,46 @@ export function getDerivative(expr: string, variable: string = 'x'): string | nu
 }
 
 export function parseGeometry(expr: string): Geometry | null {
-  const normalizedExpr = normalizeExpression(expr);
-  
-  // Match (x, y) pattern, allowing for decimals and negative numbers
-  const pointRegex = /\(\s*(-?\d*\.?\d+(?:e[+-]?\d+)?)\s*,\s*(-?\d*\.?\d+(?:e[+-]?\d+)?)\s*\)/gi;
-  
-  const matches = [...normalizedExpr.matchAll(pointRegex)];
-  
-  if (matches.length === 0) {
-    return null;
+  const normalizedExpr = normalizeExpression(expr).trim();
+  if (!normalizedExpr) return null;
+
+  const numberPattern = '-?\\d*\\.?\\d+(?:[eE][+-]?\\d+)?';
+  // Supported geometry labels:
+  //   A = (1, 2)   -> explicit named point
+  //   A(1, 2)      -> short named-point form (uppercase label)
+  //   (1, 2)       -> unlabeled point (backward compatible)
+  //
+  // The parser validates the full expression so normal function calls such as
+  // min(1, 2) are not accidentally interpreted as geometry.
+  const pointRegex = new RegExp(
+    `(?:(?:([A-Za-z_]\\w*)\\s*=\\s*)|(?:([A-Z][A-Za-z0-9_]*)\\s*))?\\(\\s*(${numberPattern})\\s*,\\s*(${numberPattern})\\s*\\)`,
+    'g'
+  );
+
+  const points: GeometryPoint[] = [];
+  let consumed = '';
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pointRegex.exec(normalizedExpr)) !== null) {
+    consumed += normalizedExpr.slice(cursor, match.index);
+    cursor = match.index + match[0].length;
+
+    const label = match[1] || match[2] || undefined;
+    points.push({
+      x: parseFloat(match[3]),
+      y: parseFloat(match[4]),
+      ...(label ? { label } : {}),
+    });
   }
 
-  const points = matches.map(match => ({
-    x: parseFloat(match[1]),
-    y: parseFloat(match[2])
-  }));
+  consumed += normalizedExpr.slice(cursor);
+
+  if (points.length === 0) return null;
+
+  // Outside point tokens, only separators/whitespace are valid.
+  // This keeps expressions like `x + (1, 2)` or `min(1, 2)` out of geometry mode.
+  if (!/^[\s,;]*$/.test(consumed)) return null;
 
   if (points.length === 1) {
     return { type: 'point', points };
@@ -165,7 +202,10 @@ export function parseGeometry(expr: string): Geometry | null {
 
 export function formatGeometry(geometry: Geometry): string {
   return geometry.points
-    .map(p => `(${Number(p.x).toFixed(2)}, ${Number(p.y).toFixed(2)})`)
+    .map((p) => {
+      const coordinate = `(${Number(p.x).toFixed(2)}, ${Number(p.y).toFixed(2)})`;
+      return p.label ? `${p.label} = ${coordinate}` : coordinate;
+    })
     .join(', ');
 }
 
@@ -700,6 +740,11 @@ export function generateFunctionData(
   const normalized = normalizeExpression(func.expr);
   
   try {
+    if (type === 'visualization') {
+      // Visualization data is rendered by Graph's debug layer.
+      return { type, points: [] };
+    }
+
     if (type === 'explicit') {
       // Explicit functions are handled by the main generatePoints for shared X-axis
       // But we can return null here or handle it if we want isolated data

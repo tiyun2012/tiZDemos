@@ -13,7 +13,8 @@ import {
   usePlotArea,
 } from 'recharts';
 import { FunctionItem } from './FunctionList';
-import { DataPoint, parseGeometry, formatGeometry, Geometry, getNiceTickData, formatTickValue, FunctionData, buildPolylinesFromSegments } from '../lib/mathUtils';
+import { DataPoint, parseGeometry, formatGeometry, Geometry, getNiceTickData, formatTickValue, FunctionData, buildPolylinesFromSegments, detectFunctionType } from '../lib/mathUtils';
+import { buildVisualizationScene, formatVisualization, parseVisualization, updateVisualizationPoint, VisualizationDefinition, VisualizationPointKey, VisualizationScene, VisualRole } from '../lib/visualization';
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import React from 'react';
 
@@ -60,6 +61,182 @@ const TickLabel = ({ cx, cy, axisType, tickValue, tickStep }: any) => {
     );
   }
 };
+
+interface VisualizationRenderItem {
+  id: string;
+  color: string;
+  definition: VisualizationDefinition;
+  scene: VisualizationScene;
+}
+
+function visualRoleColor(role: VisualRole, primaryColor: string): string {
+  switch (role) {
+    case 'primary': return primaryColor;
+    case 'projection': return '#f59e0b';
+    case 'distance': return '#10b981';
+    case 'query': return '#111827';
+    case 'derived': return '#8b5cf6';
+    case 'helper': return '#64748b';
+    case 'muted': return '#9ca3af';
+    case 'falloff': return '#06b6d4';
+    default: return primaryColor;
+  }
+}
+
+const VisualDebugLayer = React.memo(({
+  items,
+  onPointMouseDown,
+}: {
+  items: VisualizationRenderItem[];
+  onPointMouseDown: (id: string, pointKey: VisualizationPointKey) => void;
+}) => {
+  const xDomain = useXAxisDomain();
+  const yDomain = useYAxisDomain();
+  const plotArea = usePlotArea();
+
+  if (!xDomain || !yDomain || !plotArea) return null;
+
+  const getX = (x: number) => plotArea.x + ((x - (xDomain[0] as number)) / ((xDomain[1] as number) - (xDomain[0] as number))) * plotArea.width;
+  const getY = (y: number) => plotArea.y + plotArea.height - ((y - (yDomain[0] as number)) / ((yDomain[1] as number) - (yDomain[0] as number))) * plotArea.height;
+
+  return (
+    <g>
+      <defs>
+        <clipPath id="visual-debug-plot-clip">
+          <rect x={plotArea.x} y={plotArea.y} width={plotArea.width} height={plotArea.height} />
+        </clipPath>
+      </defs>
+      <g clipPath="url(#visual-debug-plot-clip)">
+        {items.flatMap((item) => item.scene.primitives.map((primitive) => {
+          const color = visualRoleColor(primitive.role, item.color);
+
+          if (primitive.type === 'segment') {
+            const x1 = getX(primitive.from.x);
+            const y1 = getY(primitive.from.y);
+            const x2 = getX(primitive.to.x);
+            const y2 = getY(primitive.to.y);
+            if (![x1, y1, x2, y2].every(Number.isFinite)) return null;
+
+            const labelT = primitive.labelAt ?? 0.5;
+            const labelX = x1 + (x2 - x1) * labelT;
+            const labelY = y1 + (y2 - y1) * labelT;
+
+            return (
+              <g key={`${item.id}-${primitive.id}`}>
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke={color}
+                  strokeWidth={primitive.width ?? 2}
+                  strokeDasharray={primitive.dashed ? '6 5' : undefined}
+                  strokeLinecap="round"
+                  opacity={primitive.opacity ?? (primitive.role === 'muted' ? 0.65 : 0.95)}
+                />
+                {primitive.label && (
+                  <text
+                    x={labelX + 7}
+                    y={labelY - 7}
+                    fill={color}
+                    fontSize={11}
+                    fontWeight={600}
+                    paintOrder="stroke"
+                    stroke="white"
+                    strokeWidth={3}
+                    strokeLinejoin="round"
+                  >
+                    {primitive.label}
+                  </text>
+                )}
+              </g>
+            );
+          }
+
+          if (primitive.type === 'circle') {
+            const cx = getX(primitive.center.x);
+            const cy = getY(primitive.center.y);
+            const rx = Math.abs(getX(primitive.center.x + primitive.radius) - cx);
+            const ry = Math.abs(getY(primitive.center.y + primitive.radius) - cy);
+            if (![cx, cy, rx, ry].every(Number.isFinite)) return null;
+
+            return (
+              <g key={`${item.id}-${primitive.id}`}>
+                <ellipse
+                  cx={cx}
+                  cy={cy}
+                  rx={rx}
+                  ry={ry}
+                  fill={color}
+                  fillOpacity={primitive.fillOpacity ?? 0}
+                  stroke={color}
+                  strokeWidth={primitive.width ?? 2}
+                  strokeDasharray={primitive.dashed ? '6 5' : undefined}
+                  opacity={primitive.opacity ?? 0.9}
+                />
+                {primitive.label && (
+                  <text
+                    x={cx + rx + 7}
+                    y={cy - 7}
+                    fill={color}
+                    fontSize={11}
+                    fontWeight={600}
+                    paintOrder="stroke"
+                    stroke="white"
+                    strokeWidth={3}
+                    strokeLinejoin="round"
+                  >
+                    {primitive.label}
+                  </text>
+                )}
+              </g>
+            );
+          }
+
+          const cx = getX(primitive.position.x);
+          const cy = getY(primitive.position.y);
+          if (![cx, cy].every(Number.isFinite)) return null;
+          const draggable = Boolean(primitive.draggableKey);
+          const labelOffsetY = primitive.role === 'projection' ? 20 : -10;
+
+          return (
+            <g key={`${item.id}-${primitive.id}`}>
+              <circle
+                cx={cx}
+                cy={cy}
+                r={primitive.radius ?? 5}
+                fill={primitive.role === 'primary' || primitive.role === 'query' ? 'white' : color}
+                stroke={color}
+                strokeWidth={draggable ? 3 : 2}
+                className={draggable ? 'cursor-move' : undefined}
+                onMouseDown={draggable ? (event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onPointMouseDown(item.id, primitive.draggableKey!);
+                } : undefined}
+              />
+              {primitive.label && (
+                <text
+                  x={cx + 9}
+                  y={cy + labelOffsetY}
+                  fill={color}
+                  fontSize={11}
+                  fontWeight={700}
+                  paintOrder="stroke"
+                  stroke="white"
+                  strokeWidth={3}
+                  strokeLinejoin="round"
+                >
+                  {primitive.label}
+                </text>
+              )}
+            </g>
+          );
+        }))}
+      </g>
+    </g>
+  );
+});
 
 const CustomFunctionLayer = React.memo(({ functions, functionDataMap }: { functions: FunctionItem[], functionDataMap: Record<string, FunctionData> }) => {
   const xDomain = useXAxisDomain();
@@ -133,6 +310,10 @@ const CustomFunctionLayer = React.memo(({ functions, functionDataMap }: { functi
   );
 });
 
+type DragTarget =
+  | { kind: 'geometry'; id: string; pointIndex: number }
+  | { kind: 'visualization'; id: string; pointKey: VisualizationPointKey };
+
 export function Graph({ 
   data, 
   functions, 
@@ -146,7 +327,7 @@ export function Graph({
   aspectLocked,
   onInteractionChange
 }: GraphProps) {
-  const [dragging, setDragging] = useState<{ id: string; pointIndex: number } | null>(null);
+  const [dragging, setDragging] = useState<DragTarget | null>(null);
   const [panning, setPanning] = useState<{ startX: number; startY: number; startXDomain: [number, number]; startYDomain: [number, number] } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -389,12 +570,32 @@ export function Graph({
 
   // Separate functions into regular plots and geometry
   const geometryItems = functions
-    .filter(f => f.visible)
+    .filter(f => f.visible && detectFunctionType(f.expr) === 'geometry')
     .map(f => ({ ...f, geometry: parseGeometry(f.expr) }))
     .filter((f): f is FunctionItem & { geometry: Geometry } => f.geometry !== null);
 
+  const visualizationItems = useMemo<VisualizationRenderItem[]>(() => {
+    return functions
+      .filter((f) => f.visible && detectFunctionType(f.expr) === 'visualization')
+      .map((f) => {
+        const definition = parseVisualization(f.expr);
+        if (!definition) return null;
+        return {
+          id: f.id,
+          color: f.color,
+          definition,
+          scene: buildVisualizationScene(definition),
+        };
+      })
+      .filter((item): item is VisualizationRenderItem => item !== null);
+  }, [functions]);
+
   const handlePointMouseDown = (id: string, pointIndex: number) => {
-    setDragging({ id, pointIndex });
+    setDragging({ kind: 'geometry', id, pointIndex });
+  };
+
+  const handleVisualizationPointMouseDown = (id: string, pointKey: VisualizationPointKey) => {
+    setDragging({ kind: 'visualization', id, pointKey });
   };
 
   const handleContainerMouseDown = (e: React.MouseEvent) => {
@@ -439,14 +640,25 @@ export function Graph({
       // Y is inverted in SVG/Canvas (0 is top)
       const newY = yDomain[1] - (clampedY / chartHeight) * yRange;
 
-      // Update the geometry
-      const item = geometryItems.find(f => f.id === dragging.id);
-      if (item) {
-        const newPoints = [...item.geometry.points];
-        newPoints[dragging.pointIndex] = { x: newX, y: newY };
-        
-        const newExpr = formatGeometry({ ...item.geometry, points: newPoints });
-        onUpdateFunction(dragging.id, { expr: newExpr });
+      if (dragging.kind === 'geometry') {
+        const item = geometryItems.find(f => f.id === dragging.id);
+        if (item) {
+          const newPoints = [...item.geometry.points];
+          newPoints[dragging.pointIndex] = { ...newPoints[dragging.pointIndex], x: newX, y: newY };
+
+          const newExpr = formatGeometry({ ...item.geometry, points: newPoints });
+          onUpdateFunction(dragging.id, { expr: newExpr });
+        }
+      } else {
+        const item = visualizationItems.find((visualization) => visualization.id === dragging.id);
+        if (item) {
+          const nextDefinition = updateVisualizationPoint(
+            item.definition,
+            dragging.pointKey,
+            { x: newX, y: newY }
+          );
+          onUpdateFunction(dragging.id, { expr: formatVisualization(nextDefinition) });
+        }
       }
     } else if (panning) {
       const rect = containerRef.current.getBoundingClientRect();
@@ -492,12 +704,12 @@ export function Graph({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragging, panning, xDomain, yDomain, geometryItems]); // Dependencies needed for calculation
+  }, [dragging, panning, xDomain, yDomain, geometryItems, visualizationItems]); // Dependencies needed for calculation
 
   return (
     <div 
       ref={containerRef}
-      className={`w-full h-full min-h-[400px] bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden select-none ${panning ? 'cursor-grabbing' : 'cursor-default'}`}
+      className={`relative w-full h-full min-h-[400px] bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden select-none ${panning ? 'cursor-grabbing' : 'cursor-default'}`}
       onMouseDown={handleContainerMouseDown}
     >
       <ResponsiveContainer width="100%" height="100%">
@@ -563,9 +775,8 @@ export function Graph({
 
           {/* Render Explicit Functions via Line (for tooltip support) */}
           {functions.map((func) => {
-            const isGeometry = parseGeometry(func.expr) !== null;
-            if (isGeometry || !func.visible) return null;
-            
+            if (!func.visible || detectFunctionType(func.expr) !== 'explicit') return null;
+
             const funcData = functionDataMap[func.id];
             if (!funcData || funcData.type !== 'explicit') return null;
 
@@ -586,6 +797,9 @@ export function Graph({
           {/* Render Parametric, Polar, and Implicit Functions via CustomFunctionLayer */}
           <CustomFunctionLayer functions={functions} functionDataMap={functionDataMap} />
 
+          {/* Render reusable algorithm/debug visualizations */}
+          <VisualDebugLayer items={visualizationItems} onPointMouseDown={handleVisualizationPointMouseDown} />
+
           {/* Render Geometry (Points and Polygons) */}
           {geometryItems.map((item) => {
             if (item.geometry?.type === 'point') {
@@ -600,6 +814,14 @@ export function Graph({
                   stroke={item.color}
                   strokeWidth={2}
                   isFront={true}
+                  label={p.label ? {
+                    value: p.label,
+                    position: 'top',
+                    fill: item.color,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    offset: 8,
+                  } : undefined}
                   className="cursor-move hover:fill-gray-100"
                   onMouseDown={(e: any, event?: any) => {
                     if (e && typeof e.stopPropagation === 'function') {
@@ -635,27 +857,50 @@ export function Graph({
                   activeDot={false}
                   dot={(props: any) => {
                     const { cx, cy, index } = props;
-                    // If it's the last point (duplicate of first), map it to index 0
-                    const realIndex = (index === points.length - 1 && points.length > item.geometry.points.length) ? 0 : index;
+                    const isClosingDuplicate = index === points.length - 1 && points.length > item.geometry.points.length;
+                    // The extra closing point is only needed for the line path. Do not
+                    // draw a second dot/label on top of the first vertex.
+                    if (isClosingDuplicate) return <g />;
+
+                    const realIndex = index;
+                    const point = item.geometry.points[realIndex];
                     
                     return (
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={5}
-                        fill="white"
-                        stroke={item.color}
-                        strokeWidth={2}
-                        className="cursor-move hover:fill-gray-100"
-                        onMouseDown={(e: any, event?: any) => {
-                          if (e && typeof e.stopPropagation === 'function') {
-                            e.stopPropagation();
-                          } else if (event && typeof event.stopPropagation === 'function') {
-                            event.stopPropagation();
-                          }
-                          handlePointMouseDown(item.id, realIndex);
-                        }}
-                      />
+                      <g>
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={5}
+                          fill="white"
+                          stroke={item.color}
+                          strokeWidth={2}
+                          className="cursor-move hover:fill-gray-100"
+                          onMouseDown={(e: any, event?: any) => {
+                            if (e && typeof e.stopPropagation === 'function') {
+                              e.stopPropagation();
+                            } else if (event && typeof event.stopPropagation === 'function') {
+                              event.stopPropagation();
+                            }
+                            handlePointMouseDown(item.id, realIndex);
+                          }}
+                        />
+                        {point?.label && (
+                          <text
+                            x={cx + 8}
+                            y={cy - 10}
+                            fill={item.color}
+                            fontSize={12}
+                            fontWeight={700}
+                            paintOrder="stroke"
+                            stroke="white"
+                            strokeWidth={3}
+                            strokeLinejoin="round"
+                            pointerEvents="none"
+                          >
+                            {point.label}
+                          </text>
+                        )}
+                      </g>
                     );
                   }}
                 />
@@ -665,6 +910,28 @@ export function Graph({
           })}
         </LineChart>
       </ResponsiveContainer>
+
+      {visualizationItems.length > 0 && (
+        <div className="absolute top-3 right-3 z-10 w-[280px] max-w-[calc(100%-24px)] rounded-lg border border-gray-200 bg-white/95 p-3 text-xs shadow-sm backdrop-blur pointer-events-none">
+          {visualizationItems.slice(0, 2).map((item, index) => (
+            <div key={item.id} className={index > 0 ? 'mt-3 border-t border-gray-100 pt-3' : ''}>
+              <div className="font-semibold text-gray-900">{item.scene.title}</div>
+              <div className="mt-0.5 text-[11px] text-gray-500">{item.scene.subtitle}</div>
+              <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-mono">
+                {item.scene.metrics.map((metric) => (
+                  <React.Fragment key={metric.key}>
+                    <span className="truncate text-gray-500">{metric.label}</span>
+                    <span className="text-right font-semibold text-gray-800">{Number(metric.value.toFixed(3))}</span>
+                  </React.Fragment>
+                ))}
+              </div>
+              <div className="mt-2 rounded bg-gray-50 px-2 py-1.5 leading-relaxed text-gray-600">
+                {item.scene.status}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
